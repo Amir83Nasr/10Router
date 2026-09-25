@@ -1,7 +1,9 @@
 name: Publish npm package
 
 # Tag push (v*) → strict version check → build → npm publish.
-# Needs repo secret NPM_TOKEN (granular token, publish scope on `10router`).
+# Auth via npm Trusted Publishing (OIDC): no long-lived token.
+# One-time setup in npmjs.com account/org settings: connect GitHub
+# (Amir83Nasr/10Router, workflow npm-publish.yml) as trusted publisher.
 # Docker publish stays in docker-publish.yml — this job is independent.
 
 on:
@@ -40,6 +42,6 @@ jobs:
       - run: pnpm install --frozen-lockfile --prefer-offline
 
       # prepublishOnly in package.json runs `pnpm build` before pack.
+      # OIDC auth: no NODE_AUTH_TOKEN — npm CLI detects the OIDC
+      # environment (id-token: write) and mints a short-lived token.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,46 @@
+name: Release notes
+
+# Tag push (v*) → extract version section from CHANGELOG.md → GitHub Release.
+# Fails when the section is missing — changelog is the single source of truth.
+# Independent from npm-publish.yml / docker-publish.yml (same trigger).
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Extract changelog section
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v ver="$ver" '
+            /^## / {
+              if (found) exit
+              found = index($0, "[" ver "]") || $0 ~ "## +" ver "([ .,—-]|$)"
+              next
+            }
+            found { print }
+          ' CHANGELOG.md > body.md
+          if [ ! -s body.md ]; then
+            echo "::error::no section for $ver in CHANGELOG.md — add '## [$ver]' first"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file body.md
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file body.md
+          fi

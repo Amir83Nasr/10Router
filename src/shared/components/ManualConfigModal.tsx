@@ -1,0 +1,55 @@
+"use client";
+import Icon from "@/shared/components/Icon";
+
+import { useState } from "react";
+import Modal from "./Modal";
+import { Button } from "@/components/ui/button";
+import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
+
+interface ManualConfigModalProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  title?: any;
+  configs?: any;
+  [key: string]: any;
+}
+
+export default function ManualConfigModal({
+  isOpen,
+  onClose,
+  title = "Manual Configuration",
+  configs = [],
+}: ManualConfigModalProps) {
+  const { copy } = useCopyToClipboard();
+  const [copiedIndex, setCopiedIndex] = useState<any>(null);
+
+  const copyConfig = (text: any, index: any) => {
+    copy(text, `manualconfig-${index}`);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="xl">
+      <div className="flex flex-col gap-4">
+        {configs.map((config: any, index: any) => (
+          <div key={index} className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-foreground">{config.filename}</span>
+              <Button variant="ghost" size="sm" onClick={() => copyConfig(config.content, index)}>
+                <Icon
+                  name={copiedIndex === index ? "check" : "content_copy"}
+                  className="text-[14px] mr-1"
+                />
+                {copiedIndex === index ? "Copied!" : "Copy"}
+              </Button>
+            </div>
+            <pre className="px-3 py-2 bg-black/5 dark:bg-white/5 rounded font-mono text-xs overflow-x-auto whitespace-pre-wrap break-all max-h-60 overflow-y-auto border border-border">
+              {config.content}
+            </pre>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}

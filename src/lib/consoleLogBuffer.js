@@ -1,0 +1,114 @@
+import { EventEmitter } from "events";
+import { CONSOLE_LOG_CONFIG } from "@/shared/constants/config";
+import { classifyLogLine } from "./logLine.js";
+
+const consoleLevels = ["log", "info", "warn", "error", "debug"];
+
+if (!global._consoleLogBufferState) {
+  global._consoleLogBufferState = {
+    logs: [],
+    patched: false,
+    originals: {},
+    emitter: new EventEmitter(),
+  };
+  global._consoleLogBufferState.emitter.setMaxListeners(50);
+}
+
+const state = global._consoleLogBufferState;
+
+// Ensure emitter exists (handles hot reload with stale global)
+if (!state.emitter) {
+  state.emitter = new EventEmitter();
+  state.emitter.setMaxListeners(50);
+}
+
+if (!state.pendingLines) state.pendingLines = [];
+if (!state.flushTimer) state.flushTimer = null;
+
+const FLUSH_INTERVAL_MS = 100;
+const MAX_BATCH_LINES = 50;
+
+function flushPendingLines() {
+  state.flushTimer = null;
+  if (!state.pendingLines.length) return;
+
+  const lines = state.pendingLines.splice(0, state.pendingLines.length);
+  state.emitter.emit("lines", lines);
+}
+
+function scheduleFlush() {
+  if (state.flushTimer) return;
+  state.flushTimer = setTimeout(flushPendingLines, FLUSH_INTERVAL_MS);
+  state.flushTimer?.unref?.();
+}
+
+// Strip ANSI escape codes so terminal colors don't bleed into UI
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+
+function stripAnsi(str) {
+  return str.replace(ANSI_RE, "");
+}
+
+function formatArg(arg) {
+  if (typeof arg === "string") return stripAnsi(arg);
+  if (arg instanceof Error) return stripAnsi(arg.stack || arg.message || String(arg));
+  try {
+    return stripAnsi(JSON.stringify(arg));
+  } catch {
+    return stripAnsi(String(arg));
+  }
+}
+
+// Structured entry: level/category derived from console method + content
+// signals (see logLine.js). `text` keeps the exact ANSI-stripped line so
+// legacy string consumers see no change.
+function toLogEntry(level, args) {
+  const text = args.map(formatArg).join(" ");
+  const { level: derived, category } = classifyLogLine(level, text);
+  return { ts: Date.now(), level: derived, category, text };
+}
+
+function appendLine(entry) {
+  state.logs.push(entry);
+  const maxLines = CONSOLE_LOG_CONFIG.maxLines;
+  if (state.logs.length > maxLines) {
+    state.logs = state.logs.slice(-maxLines);
+  }
+  state.pendingLines.push(entry);
+  if (state.pendingLines.length >= MAX_BATCH_LINES) {
+    if (state.flushTimer) {
+      clearTimeout(state.flushTimer);
+      state.flushTimer = null;
+    }
+    flushPendingLines();
+  } else {
+    scheduleFlush();
+  }
+}
+
+export function initConsoleLogCapture() {
+  if (state.patched) return;
+
+  for (const level of consoleLevels) {
+    state.originals[level] = console[level];
+    console[level] = (...args) => {
+      appendLine(toLogEntry(level, args));
+      state.originals[level](...args);
+    };
+  }
+
+  state.patched = true;
+}
+
+export function getConsoleLogs() {
+  return state.logs;
+}
+
+export function clearConsoleLogs() {
+  state.logs = [];
+  state.emitter.emit("clear");
+}
+
+export function getConsoleEmitter() {
+  return state.emitter;
+}

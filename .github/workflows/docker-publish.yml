@@ -1,0 +1,132 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  GHCR_IMAGE: ghcr.io/amir83nasr/10router
+  # `secrets` context is not allowed in `if:` expressions — mirror to env first.
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Lowercase GHCR image name
+        run: |
+          echo "GHCR_IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@v4
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ${{ env.GHCR_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+          flavor: |
+            latest=false
+
+      - name: Extract Docker Hub metadata
+        id: meta_hub
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ${{ env.DOCKERHUB_USERNAME }}/10router
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+          flavor: |
+            latest=false
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ steps.meta_hub.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache,mode=max
+          # amd64-only: `next build` (SWC native binary) dies with SIGILL
+          # (exit 132) under QEMU arm64 emulation on the amd64 runner.
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+
+      # Tag push only (not workflow_dispatch — no semver there).
+      # Deletes package versions whose tags are all outside KEEP.
+      # Untagged versions left alone (may be children of buildcache/index manifests).
+      - name: Prune old tags
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ref=${GHCR_IMAGE#ghcr.io/}
+          owner=${ref%%/*}
+          pkg=${ref##*/}
+          export KEEP="latest,buildcache,${{ steps.meta.outputs.version }}"
+
+          gh api --paginate "users/$owner/packages/container/$pkg/versions?per_page=100" --jq '
+            (env.KEEP | split(",")) as $k
+            | .[]
+            | ((.metadata.container.tags // []) | map(select(length > 0))) as $tags
+            | select(($tags | length > 0) and (($tags | map(. as $t | $k | index($t)) | any) | not))
+            | .id
+          ' | while IFS= read -r id; do
+            echo "Deleting GHCR version $id"
+            gh api -X DELETE "users/$owner/packages/container/$pkg/versions/$id"
+          done
+
+          # Docker Hub (same tags, only when creds exist)
+          if [ -n "${DOCKERHUB_USERNAME:-}" ] && [ -n "${DOCKERHUB_TOKEN:-}" ]; then
+            hub_token=$(curl -sS -X POST https://hub.docker.com/v2/users/login/ \
+              -H 'Content-Type: application/json' \
+              -d "{\"username\":\"$DOCKERHUB_USERNAME\",\"password\":\"$DOCKERHUB_TOKEN\"}" \
+              | jq -r '.token // empty')
+            if [ -n "$hub_token" ]; then
+              curl -sS -H "Authorization: JWT $hub_token" \
+                "https://hub.docker.com/v2/repositories/$DOCKERHUB_USERNAME/10router/tags?page_size=100" \
+                | jq -r --arg keep "$KEEP" '
+                  ($keep | split(",")) as $k
+                  | .results[].name
+                  | select(. as $t | ($k | index($t)) | not)
+                ' | while IFS= read -r tag; do
+                  echo "Deleting Docker Hub tag $tag"
+                  curl -sS -o /dev/null -w "%{http_code}\n" -X DELETE \
+                    -H "Authorization: JWT $hub_token" \
+                    "https://hub.docker.com/v2/repositories/$DOCKERHUB_USERNAME/10router/tags/$tag/"
+                done
+            fi
+          fi

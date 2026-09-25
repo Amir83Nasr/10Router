@@ -1,0 +1,45 @@
+name: Publish npm package
+
+# Tag push (v*) → strict version check → build → npm publish.
+# Needs repo secret NPM_TOKEN (granular token, publish scope on `10router`).
+# Docker publish stays in docker-publish.yml — this job is independent.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Tag must match package.json version
+        run: |
+          set -euo pipefail
+          pkg=$(node -p "require('./package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag v$tag != package.json $pkg — bump version first"
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.5.1
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile --prefer-offline
+
+      # prepublishOnly in package.json runs `pnpm build` before pack.
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

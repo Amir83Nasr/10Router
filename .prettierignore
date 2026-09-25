@@ -1,0 +1,28 @@
+# Generated / build output
+node_modules
+.pnp
+.pnp.js
+.next
+.next-cli-build
+out
+build
+product
+coverage
+
+# VCS / tooling internals
+.git
+.claude
+.github
+
+# Lockfiles (generated)
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+.bun.lock
+
+# Baseline snapshots (must stay byte-stable for regression verifiers)
+tests/__baseline__/*.json
+
+# Logs / local state
+logs
+*.log

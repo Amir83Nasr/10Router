@@ -1,0 +1,661 @@
+"use client";
+import Icon from "@/shared/components/Icon";
+
+import { useState, useEffect, useRef } from "react";
+import { ModelSelectModal, ManualConfigModal } from "@/shared/components";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Loader2 } from "lucide-react";
+import Image from "next/image";
+import BaseUrlSelect from "../shared/BaseUrlSelect";
+import { rememberEndpoint } from "../shared/cliEndpointPresets";
+import ApiKeySelect from "../shared/ApiKeySelect";
+import { matchKnownEndpoint } from "../shared/cliEndpointMatch";
+
+export default function OpenCodeToolCard({
+  tool,
+  isExpanded,
+  onToggle,
+  baseUrl,
+  apiKeys,
+  activeProviders,
+  cloudEnabled,
+  initialStatus,
+  tunnelEnabled,
+  tunnelPublicUrl,
+  tailscaleEnabled,
+  tailscaleUrl,
+}: any) {
+  const [status, setStatus] = useState(initialStatus || null);
+  const [checking, setChecking] = useState<boolean>(false);
+  const [applying, setApplying] = useState<boolean>(false);
+  const [restoring, setRestoring] = useState<boolean>(false);
+  const [message, setMessage] = useState<any>(null);
+  const [showInstallGuide, setShowInstallGuide] = useState<boolean>(false);
+  const [selectedApiKey, setSelectedApiKey] = useState<string>("");
+  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [subagentModel, setSubagentModel] = useState<string>("");
+  const [modalOpen, setModalOpen] = useState<boolean>(false);
+  const [subagentModalOpen, setSubagentModalOpen] = useState<boolean>(false);
+  const [modelAliases, setModelAliases] = useState<any>({});
+  const [showManualConfigModal, setShowManualConfigModal] = useState<boolean>(false);
+  const [customBaseUrl, setCustomBaseUrl] = useState<string>("");
+  const [selectedModels, setSelectedModels] = useState<any[]>([]);
+  const [activeModel, setActiveModel] = useState<string>("");
+  const selectedModelsRef = useRef<any[]>([]);
+
+  useEffect(() => {
+    selectedModelsRef.current = selectedModels;
+  }, [selectedModels]);
+
+  useEffect(() => {
+    if (apiKeys?.length > 0 && !selectedApiKey) {
+      setSelectedApiKey(apiKeys[0].key);
+    }
+  }, [apiKeys, selectedApiKey]);
+
+  useEffect(() => {
+    if (initialStatus) setStatus(initialStatus);
+  }, [initialStatus]);
+
+  useEffect(() => {
+    if (isExpanded) {
+      if (!status) checkStatus();
+      fetchModelAliases();
+    }
+  }, [isExpanded]);
+
+  // Sync models from existing config
+  useEffect(() => {
+    if (status?.opencode?.models) {
+      setSelectedModels(status.opencode.models);
+    }
+    if (status?.opencode?.activeModel) {
+      setActiveModel(status.opencode.activeModel);
+    }
+
+    // Parse subagent settings from agent.explorer if exists
+    if (status?.config?.agent?.explorer?.model?.startsWith("10router/")) {
+      setSubagentModel(status.config.agent.explorer.model.replace("10router/", ""));
+    }
+  }, [status]);
+
+  const fetchModelAliases = async () => {
+    try {
+      const res = await fetch("/api/models/alias");
+      const data = await res.json();
+      if (res.ok) setModelAliases(data.aliases || {});
+    } catch (error) {
+      console.log("Error fetching model aliases:", error);
+    }
+  };
+
+  const saveModels = async (models) => {
+    try {
+      const keyToUse =
+        selectedApiKey && selectedApiKey.trim()
+          ? selectedApiKey
+          : !cloudEnabled
+            ? "sk_10router"
+            : selectedApiKey;
+      const validActiveModel = models.includes(activeModel) ? activeModel : models[0] || "";
+      await fetch("/api/cli-tools/opencode-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseUrl: getEffectiveBaseUrl(),
+          apiKey: keyToUse,
+          models,
+          activeModel: validActiveModel,
+          subagentModel,
+        }),
+      });
+    } catch (error) {
+      console.log("Error saving models:", error);
+    }
+  };
+
+  const currentBaseUrl = status?.config?.provider?.["10router"]?.options?.baseURL || "";
+
+  const getConfigStatus = () => {
+    if (!status?.installed) return null;
+    if (!status.config) return "not_configured";
+    if (!status.has10Router) return "not_configured";
+    const url = status.config?.provider?.["10router"]?.options?.baseURL || "";
+    return matchKnownEndpoint(url, { tunnelPublicUrl, tailscaleUrl }) ? "configured" : "other";
+  };
+
+  const configStatus = getConfigStatus();
+
+  const getEffectiveBaseUrl = () => {
+    const url = customBaseUrl || baseUrl;
+    return url.endsWith("/v1") ? url : `${url}/v1`;
+  };
+
+  const getDisplayUrl = () => customBaseUrl || `${baseUrl}/v1`;
+
+  const checkStatus = async () => {
+    setChecking(true);
+    try {
+      const res = await fetch("/api/cli-tools/opencode-settings");
+      const data = await res.json();
+      setStatus(data);
+    } catch (error) {
+      setStatus({ installed: false, error: error.message });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleApply = async () => {
+    setApplying(true);
+    setMessage(null);
+    try {
+      const keyToUse =
+        selectedApiKey && selectedApiKey.trim()
+          ? selectedApiKey
+          : !cloudEnabled
+            ? "sk_10router"
+            : selectedApiKey;
+
+      const res = await fetch("/api/cli-tools/opencode-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseUrl: getEffectiveBaseUrl(),
+          apiKey: keyToUse,
+          models: selectedModels,
+          activeModel: activeModel === "" ? "" : activeModel || selectedModels[0],
+          subagentModel: subagentModel,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // Remember the endpoint so it stays selectable next time
+        rememberEndpoint(getEffectiveBaseUrl(), { tunnelPublicUrl, tailscaleUrl });
+        setMessage({ type: "success", text: "Settings applied successfully!" });
+        checkStatus();
+      } else {
+        setMessage({ type: "error", text: data.error || "Failed to apply settings" });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: error.message });
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleReset = async () => {
+    setRestoring(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/cli-tools/opencode-settings", { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: "success", text: "Settings reset successfully!" });
+        setSelectedModel("");
+        setSubagentModel("");
+        setSelectedModels([]);
+        setActiveModel("");
+        checkStatus();
+      } else {
+        setMessage({ type: "error", text: data.error || "Failed to reset settings" });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: error.message });
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const getManualConfigs = () => {
+    const keyToUse =
+      selectedApiKey && selectedApiKey.trim()
+        ? selectedApiKey
+        : !cloudEnabled
+          ? "sk_10router"
+          : "<API_KEY_FROM_DASHBOARD>";
+
+    const modelsToShow = selectedModels.length > 0 ? selectedModels : ["provider/model-id"];
+    const activeModelToShow = activeModel || selectedModels[0] || modelsToShow[0];
+    const effectiveSubagentModel = subagentModel || activeModelToShow;
+
+    const modelsObj = {};
+    modelsToShow.forEach((m) => {
+      modelsObj[m] = { name: m, modalities: { input: ["text", "image"], output: ["text"] } };
+    });
+
+    return [
+      {
+        filename: "~/.config/opencode/opencode.json",
+        content: JSON.stringify(
+          {
+            provider: {
+              "10router": {
+                npm: "@ai-sdk/openai-compatible",
+                options: { baseURL: getEffectiveBaseUrl(), apiKey: keyToUse },
+                models: modelsObj,
+              },
+            },
+            model: `10router/${activeModelToShow}`,
+            agent: {
+              explorer: {
+                description: "Fast explorer subagent for codebase exploration",
+                mode: "subagent",
+                model: `10router/${effectiveSubagentModel}`,
+              },
+            },
+          },
+          null,
+          2,
+        ),
+      },
+    ];
+  };
+
+  return (
+    <Card size="sm" className="overflow-hidden">
+      <CardContent>
+        <div
+          className="flex items-start justify-between gap-3 hover:cursor-pointer sm:items-center"
+          onClick={onToggle}
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="size-8 flex items-center justify-center shrink-0">
+              <Image
+                src="/providers/opencode.png"
+                alt={tool.name}
+                width={32}
+                height={32}
+                className="size-8 object-contain rounded-lg"
+                sizes="32px"
+                onError={(e: any) => {
+                  e.target.style.display = "none";
+                }}
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <h3 className="font-medium text-sm">{tool.name}</h3>
+                {configStatus === "configured" && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-green-500/10 text-green-600 dark:text-green-400 rounded-full">
+                    Connected
+                  </span>
+                )}
+                {configStatus === "not_configured" && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 rounded-full">
+                    Not configured
+                  </span>
+                )}
+                {configStatus === "other" && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full">
+                    Other
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground truncate">{tool.description}</p>
+            </div>
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
+            {checking && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Icon name="progress_activity" className="animate-spin" />
+                <span>Checking OpenCode CLI...</span>
+              </div>
+            )}
+
+            {!checking && status && !status.installed && (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <Icon name="warning" className="text-yellow-500" />
+                    <div className="flex-1">
+                      <p className="font-medium text-yellow-600 dark:text-yellow-400">
+                        {status.container
+                          ? "10Router runs in a container"
+                          : "OpenCode CLI not detected locally"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {status.container
+                          ? "The CLI lives on your host, not inside the container. Copy the manual config below into your host's opencode.json."
+                          : "Manual configuration is still available if 10router is deployed on a remote server."}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pl-9">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowManualConfigModal(true)}
+                      className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30"
+                    >
+                      <Icon name="content_copy" className="text-[18px] mr-1" />
+                      Manual Config
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowInstallGuide(!showInstallGuide)}
+                    >
+                      <Icon
+                        name={showInstallGuide ? "expand_less" : "help"}
+                        className="text-[18px] mr-1"
+                      />
+                      {showInstallGuide ? "Hide" : "How to Install"}
+                    </Button>
+                  </div>
+                </div>
+                {showInstallGuide && (
+                  <div className="p-4 bg-card border border-border rounded-lg">
+                    <h4 className="font-medium mb-3">Installation Guide</h4>
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        <p className="text-muted-foreground mb-1">macOS / Linux:</p>
+                        <code className="block px-3 py-2 bg-black/5 dark:bg-white/5 rounded font-mono text-xs">
+                          npm install -g opencode-ai
+                        </code>
+                      </div>
+                      <p className="text-muted-foreground">
+                        After installation, run{" "}
+                        <code className="px-1 bg-black/5 dark:bg-white/5 rounded">opencode</code> to
+                        verify.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!checking && status?.installed && (
+              <>
+                <div className="flex flex-col gap-2">
+                  {/* Current base URL */}
+                  {/* Endpoint (selector) */}
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_1fr] sm:items-center sm:gap-2">
+                    <span className="text-xs font-semibold text-foreground sm:text-right sm:text-sm">
+                      Select Endpoint
+                    </span>
+                    <BaseUrlSelect
+                      value={customBaseUrl || getDisplayUrl()}
+                      onChange={setCustomBaseUrl}
+                      requiresExternalUrl={tool.requiresExternalUrl}
+                      tunnelEnabled={tunnelEnabled}
+                      tunnelPublicUrl={tunnelPublicUrl}
+                      tailscaleEnabled={tailscaleEnabled}
+                      tailscaleUrl={tailscaleUrl}
+                      currentUrl={currentBaseUrl}
+                    />
+                  </div>
+
+                  {/* Current configured */}
+                  {status?.config?.provider?.["10router"]?.options?.baseURL && (
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_1fr_auto] sm:items-center sm:gap-2">
+                      <span className="text-xs font-semibold text-foreground sm:text-right sm:text-sm">
+                        Current
+                      </span>
+                      <span className="min-w-0 truncate rounded bg-card/40 px-2 py-2 text-xs text-muted-foreground sm:py-1.5">
+                        {status.config.provider["10router"].options.baseURL}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* API Key */}
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_1fr_auto] sm:items-center sm:gap-2">
+                    <span className="text-xs font-semibold text-foreground sm:text-right sm:text-sm">
+                      API Key
+                    </span>
+                    <ApiKeySelect
+                      value={selectedApiKey}
+                      onChange={setSelectedApiKey}
+                      apiKeys={apiKeys}
+                      cloudEnabled={cloudEnabled}
+                    />
+                  </div>
+
+                  {/* Models */}
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_1fr] sm:items-start sm:gap-2">
+                    <span className="pt-1 text-xs font-semibold text-foreground sm:text-right sm:text-sm">
+                      Models
+                    </span>
+                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                      <div className="flex min-h-7 flex-wrap gap-1.5 rounded border border-border bg-card px-2 py-1.5">
+                        {selectedModels.length === 0 ? (
+                          <span className="text-xs text-muted-foreground">No models selected</span>
+                        ) : (
+                          selectedModels.map((model) => (
+                            <Tooltip key={model}>
+                              <TooltipTrigger asChild>
+                                <span
+                                  onClick={async () => {
+                                    if (model === activeModel) {
+                                      try {
+                                        const res = await fetch(
+                                          "/api/cli-tools/opencode-settings",
+                                          {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ clearActiveModel: true }),
+                                          },
+                                        );
+                                        if (res.ok) {
+                                          setActiveModel("");
+                                          checkStatus();
+                                        }
+                                      } catch (error) {
+                                        console.log("Error clearing active model:", error);
+                                      }
+                                    } else {
+                                      setActiveModel(model);
+                                    }
+                                  }}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs cursor-pointer transition-colors ${
+                                    model === activeModel
+                                      ? "bg-primary/10 text-primary border border-primary"
+                                      : "bg-black/5 dark:bg-white/5 text-muted-foreground border border-transparent hover:border-border"
+                                  }`}
+                                >
+                                  {model === activeModel && (
+                                    <Icon name="star" className="text-[10px]" />
+                                  )}
+                                  {model}
+                                  <button
+                                    onClick={async (e: any) => {
+                                      e.stopPropagation();
+                                      try {
+                                        const res = await fetch(
+                                          `/api/cli-tools/opencode-settings?model=${encodeURIComponent(model)}`,
+                                          { method: "DELETE" },
+                                        );
+                                        if (res.ok) {
+                                          const newModels = selectedModels.filter(
+                                            (m) => m !== model,
+                                          );
+                                          setSelectedModels(newModels);
+                                          if (activeModel === model) {
+                                            setActiveModel("");
+                                          }
+                                          checkStatus();
+                                        }
+                                      } catch (error) {
+                                        console.log("Error removing model:", error);
+                                      }
+                                    }}
+                                    className="ml-0.5 hover:text-red-500"
+                                  >
+                                    <Icon name="close" className="text-[12px]" />
+                                  </button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {model === activeModel
+                                  ? "Click to clear active model"
+                                  : "Click to set as active"}
+                              </TooltipContent>
+                            </Tooltip>
+                          ))
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          onClick={() => setModalOpen(true)}
+                          className="cursor-pointer rounded border border-border bg-card px-2 py-1 text-xs text-foreground transition-colors hover:border-primary"
+                        >
+                          Add Model
+                        </button>
+                        <span className="text-xs text-muted-foreground">
+                          {selectedModels.length > 0 && activeModel ? (
+                            <>
+                              Active: <span className="text-primary">{activeModel}</span>
+                            </>
+                          ) : selectedModels.length > 0 ? (
+                            <span className="text-yellow-500">
+                              Click a model to set/clear active
+                            </span>
+                          ) : (
+                            "Select models to add"
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Subagent Model */}
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_1fr_auto] sm:items-center sm:gap-2">
+                    <span className="text-xs font-semibold text-foreground sm:text-right sm:text-sm">
+                      Subagent Model
+                    </span>
+                    <div className="relative w-full min-w-0">
+                      <input
+                        type="text"
+                        value={subagentModel}
+                        onChange={(e: any) => setSubagentModel(e.target.value)}
+                        placeholder={
+                          selectedModels[0] || "provider/model-id (defaults to main model)"
+                        }
+                        className="w-full min-w-0 pl-2 pr-7 py-2 bg-card rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
+                      />
+                      {subagentModel && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => setSubagentModel("")}
+                              className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-red-500 rounded transition-colors"
+                            >
+                              <Icon name="close" className="text-[14px]" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>Clear (will use main model)</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setSubagentModalOpen(true)}
+                      className="w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 bg-card border-border text-foreground hover:border-primary cursor-pointer"
+                    >
+                      Select Model
+                    </button>
+                  </div>
+                </div>
+
+                {message && (
+                  <div
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${message.type === "success" ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
+                  >
+                    <Icon
+                      name={message.type === "success" ? "check_circle" : "error"}
+                      className="text-[14px]"
+                    />
+                    <span>{message.text}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center">
+                  <Button
+                    size="sm"
+                    onClick={handleApply}
+                    disabled={selectedModels.length === 0 || applying}
+                  >
+                    {applying && <Loader2 className="size-4 animate-spin" />}
+                    <Icon name="save" className="text-[14px] mr-1" />
+                    Apply
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleReset}
+                    disabled={!status.has10Router || restoring}
+                  >
+                    {restoring && <Loader2 className="size-4 animate-spin" />}
+                    <Icon name="restore" className="text-[14px] mr-1" />
+                    Reset
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setShowManualConfigModal(true)}>
+                    <Icon name="content_copy" className="text-[14px] mr-1" />
+                    Manual Config
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {modalOpen && (
+          <ModelSelectModal
+            isOpen={modalOpen}
+            onClose={() => {
+              setModalOpen(false);
+              saveModels(selectedModelsRef.current);
+            }}
+            onSelect={(model) => {
+              if (!selectedModels.includes(model.value)) {
+                setSelectedModels([...selectedModels, model.value]);
+                if (!activeModel) setActiveModel(model.value);
+              }
+            }}
+            onDeselect={(model) => {
+              const remaining = selectedModels.filter((m) => m !== model.value);
+              setSelectedModels(remaining);
+              if (activeModel === model.value) {
+                setActiveModel(remaining[0] || "");
+              }
+            }}
+            selectedModel={null}
+            activeProviders={activeProviders}
+            modelAliases={modelAliases}
+            addedModelValues={selectedModels}
+            closeOnSelect={false}
+            title="Add Model for OpenCode"
+          />
+        )}
+
+        {subagentModalOpen && (
+          <ModelSelectModal
+            isOpen={subagentModalOpen}
+            onClose={() => setSubagentModalOpen(false)}
+            onSelect={(model) => {
+              setSubagentModel(model.value);
+              setSubagentModalOpen(false);
+            }}
+            selectedModel={subagentModel}
+            activeProviders={activeProviders}
+            modelAliases={modelAliases}
+            title="Select Subagent Model for OpenCode"
+          />
+        )}
+
+        <ManualConfigModal
+          isOpen={showManualConfigModal}
+          onClose={() => setShowManualConfigModal(false)}
+          title="OpenCode - Manual Configuration"
+          configs={getManualConfigs()}
+        />
+      </CardContent>
+    </Card>
+  );
+}

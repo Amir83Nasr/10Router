@@ -1,0 +1,28 @@
+"use client";
+
+import { useEffect } from "react";
+import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { initRuntimeI18n, reloadTranslations } from "./runtime";
+
+export function RuntimeI18nProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    initRuntimeI18n();
+  }, []);
+
+  // Re-process DOM when route changes
+  useEffect(() => {
+    if (pathname) {
+      // Double RAF to ensure React has committed changes to DOM
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          reloadTranslations();
+        });
+      });
+    }
+  }, [pathname]);
+
+  return <>{children}</>;
+}

@@ -1,0 +1,34 @@
+#!/usr/bin/env sh
+# Block push unless the same gates as CI are green:
+#   1) Prettier on files changed vs the push base
+#   2) Full vitest suite + no-regression baseline gate (pnpm test)
+
+set -e
+
+echo "── pre-push: format check ─────────────────────────────"
+BASE=$(git merge-base HEAD @{upstream} 2>/dev/null || git merge-base HEAD origin/master 2>/dev/null || echo "")
+if [ -n "$BASE" ] && [ "$BASE" != "$(git rev-parse HEAD)" ]; then
+  RANGE="$BASE...HEAD"
+else
+  # No upstream / already at base: check the last commit's files.
+  RANGE="HEAD~1...HEAD"
+fi
+FILES=$(git diff --name-only --diff-filter=ACM "$RANGE" -- \
+  '*.js' '*.mjs' '*.cjs' '*.jsx' '*.ts' '*.tsx' \
+  '*.css' '*.scss' '*.json' '*.md' '*.yaml' '*.yml' 2>/dev/null || true)
+if [ -z "$FILES" ]; then
+  echo "No changed files to check."
+else
+  echo "$FILES" | xargs pnpm exec prettier --check --ignore-unknown
+fi
+
+echo "── pre-push: TS freeze (no new JS under src/) ───────────"
+NEWJS=$(git diff --name-only --diff-filter=A "$RANGE" -- 'src/**/*.js' 'src/**/*.jsx' 2>/dev/null || true)
+if [ -n "$NEWJS" ]; then
+  echo "[ERR] New JS files under src/ are frozen — write TS/TSX instead:"
+  echo "$NEWJS"
+  exit 1
+fi
+
+echo "── pre-push: test gate ────────────────────────────────"
+pnpm test

@@ -1,0 +1,99 @@
+# 10router local ignores
+# ─── RUNTIME / SESSION STATE ──────────────────────────────
+# App runtime, local-only working dirs and scratch notes.
+data/
+source/*
+cursor/*
+test/*
+open-sse/test/*
+docs/*
+PR/*
+.PR/
+.claude/
+.docs/
+.repo/
+.script/
+10router-*
+.kiro/
+.start-dev.ps1
+start-dev-silent.cjs
+deploy*.sh
+ecosystem.config.*
+
+# ─── LOGS / HISTORY / TELEMETRY ───────────────────────────
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+logs/*
+debug.log
+.dev-server.log
+.dev-server-err.log
+.vitest/
+
+# ─── CACHE / DOWNLOADED ARTIFACTS ─────────────────────────
+/coverage
+.next-analyze/*
+graphify-out/*
+scripts/agSniffer/*
+.codegraph/
+gitbooks/*
+gitbook/README.md
+
+# ─── BUILD / DIST ─────────────────────────────────────────
+/.next-dev-ui/
+/.next/
+/.next-cli-build/
+/out/
+/build
+cli/.build-home/
+product
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+.bin/*
+
+# ─── DEPENDENCIES ─────────────────────────────────────────
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+package-lock.json
+
+# ─── BACKUPS ──────────────────────────────────────────────
+open-sse.old/
+README1.md
+RM.md
+RM.vn.md
+PUBLIC.md
+PUBLIC.en.md
+Thanks.md
+
+# ─── SECRETS / CREDENTIALS / TOKENS ───────────────────────
+.env*
+*.pem
+.engine-token.txt
+.tmp-prov.json
+.tmp-providers.json
+.oauth-session.json
+
+# ─── OS / EDITOR CLUTTER ──────────────────────────────────
+.DS_Store
+.idea/
+.cursor/*
+.graphifyignore
+.github/instructions/codacy.instructions.md
+.codex/
+
+# ─── PERSONAL ─────────────────────────────────────────────
+TODO.md
+
+# ─── ! ────────────────────────────────────────────────────
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+!.env.example
+!ARCHITECTURE.md
+!DOCKER.md
+!CHANGELOG.md

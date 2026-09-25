@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    name: Format (changed files)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.5.1
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Prettier check on changed files
+        # Whole-repo `prettier --check .` is intentionally NOT the gate:
+        # the repo carries legacy formatting debt, so it stays red. Changed
+        # files only — same semantics as `pnpm lint:changed` locally.
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          FILES=$(git diff --name-only --diff-filter=ACM "$BASE"...HEAD -- \
+            '*.js' '*.mjs' '*.cjs' '*.jsx' '*.ts' '*.tsx' \
+            '*.css' '*.scss' '*.json' '*.md' '*.yaml' '*.yml' || true)
+          if [ -z "$FILES" ]; then
+            echo "No changed files to check."
+            exit 0
+          fi
+          echo "$FILES" | xargs pnpm exec prettier --check --ignore-unknown
+
+  test:
+    name: Unit tests (no-regression gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12.5.1
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install root deps (tests import from src/)
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Install test deps (tests/ is a standalone package)
+        working-directory: tests
+        run: npm install --no-audit --no-fund
+      - name: Run unit tests + regression gate
+        # scripts/run-tests.mjs: full suite, fails only on NEW failures vs
+        # tests/__baseline__/baseline-results.json. Live/credential tests
+        # excluded by default; pass --real to include them.
+        run: pnpm test

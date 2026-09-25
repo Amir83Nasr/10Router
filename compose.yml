@@ -1,0 +1,19 @@
+services:
+  10router:
+    image: amir83nasr/10router:latest
+    pull_policy: always
+    container_name: 10router
+    restart: always
+    ports:
+      - "20128:20128"
+    volumes:
+      - $HOME/.10router:/app/data
+      - $HOME:/host-home:rw
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /app/data
+      HOST_HOME: /host-home
+      PORT: "20128"
+      HOSTNAME: "0.0.0.0"
+      NODE_ENV: production

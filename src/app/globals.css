@@ -1,0 +1,356 @@
+/* source() sets scan base to src/ for both webpack + Turbopack; auto-detection still skips binaries + gitignore */
+@import "tailwindcss" source("../../");
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+
+  --font-sans: var(--font-inter), var(--font-vazirmatn), ui-sans-serif, system-ui, sans-serif;
+
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 18%, transparent);
+    color: var(--foreground);
+  }
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  html[lang="fa"] body {
+    font-family: var(--font-vazirmatn), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  input,
+  textarea {
+    accent-color: var(--primary);
+  }
+  select {
+    color-scheme: light;
+    background-color: var(--background);
+  }
+  .dark select {
+    color-scheme: dark;
+  }
+  .dark select option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+}
+
+/* ── PROVIDER TOPOLOGY ─────────────────────────────────── */
+/* Router node pulse + electric edge beam. Scoped to the
+   ProviderTopology component (usage dashboard). */
+@keyframes topo-router-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 8px #fde047,
+      0 0 20px color-mix(in srgb, var(--primary) 65%, transparent),
+      0 0 32px rgba(34, 211, 238, 0.4),
+      inset 0 0 10px rgba(253, 224, 71, 0.3);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow:
+      0 0 14px #fef08a,
+      0 0 28px #facc15,
+      0 0 44px rgba(34, 211, 238, 0.6),
+      inset 0 0 14px rgba(255, 255, 255, 0.25);
+  }
+}
+@keyframes topo-router-icon-shake {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+    filter: drop-shadow(0 0 2px #fde047);
+  }
+  25% {
+    transform: rotate(-5deg) scale(1.08);
+    filter: drop-shadow(0 0 6px #facc15);
+  }
+  75% {
+    transform: rotate(5deg) scale(1.08);
+    filter: drop-shadow(0 0 6px #22d3ee);
+  }
+}
+@keyframes topo-router-label-flicker {
+  0%,
+  100% {
+    text-shadow:
+      0 0 6px #fde047,
+      0 0 12px #22d3ee;
+  }
+  50% {
+    text-shadow:
+      0 0 10px #fff,
+      0 0 18px #facc15;
+  }
+}
+@keyframes topo-edge-dash {
+  to {
+    stroke-dashoffset: -36;
+  }
+}
+@keyframes topo-edge-flicker {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  40% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 0.55;
+  }
+  70% {
+    opacity: 1;
+  }
+}
+.topo-router-core {
+  animation: topo-router-pulse 0.75s ease-in-out infinite;
+  border-color: #fde047 !important;
+}
+.topo-router-icon {
+  animation: topo-router-icon-shake 0.45s ease-in-out infinite;
+}
+.topo-router-label {
+  animation: topo-router-label-flicker 0.7s ease-in-out infinite;
+}
+.topo-router-badge {
+  box-shadow:
+    0 0 10px #fde047,
+    0 0 16px rgba(34, 211, 238, 0.6);
+}
+.topo-edge-kame {
+  stroke-dasharray: 8 6;
+  animation: topo-edge-dash 0.22s linear infinite;
+}
+.topo-edge-halo {
+  animation: topo-edge-flicker 0.18s steps(2) infinite;
+}
+.topo-edge-plasma {
+  stroke-dasharray: 14 10;
+  animation:
+    topo-edge-dash 0.18s linear infinite,
+    topo-edge-flicker 0.22s steps(3) infinite;
+}
+
+/* React Flow controls: match app theme */
+.topo-flow-controls {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.topo-flow-controls button {
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+.topo-flow-controls button:last-child {
+  border-bottom: 0;
+}
+.topo-flow-controls button:hover {
+  background: var(--muted);
+}
+
+/* ── DASHBOARD GRID BG ─────────────────────────────────── */
+/* Squared paper backdrop for main dashboard content only
+   (applied in DashboardLayout, sidebar untouched). */
+.dashboard-grid-bg {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--border) 40%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--border) 40%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 48px 48px;
+}
+
+/* ── MARKDOWN BODY ─────────────────────────────────────── */
+/* Changelog modal markdown. Scoped to ChangelogModal. */
+.changelog-body h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 1.5rem 0 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.changelog-body h1:first-child {
+  margin-top: 0;
+}
+.changelog-body h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 2.25rem 0 0.6rem;
+  color: var(--primary);
+}
+.changelog-body h2:first-child {
+  margin-top: 0;
+}
+.changelog-body h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.4rem;
+}
+.changelog-body ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.changelog-body li {
+  margin: 0.25rem 0;
+  line-height: 1.6;
+}
+.changelog-body p {
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+.changelog-body code {
+  background: var(--muted);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.875em;
+  font-family: ui-monospace, monospace;
+}
+.changelog-body a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.changelog-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5rem 0;
+}

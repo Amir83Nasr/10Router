@@ -3,15 +3,25 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-// Shared launcher for `pnpm dev` (main) and `pnpm dev:ui` (isolated UI test
-// with its own port + DATA_DIR so the real ~/.10router DB is never touched).
-// Ports/dirs come from .env — see DEV_* in .env.example. Precedence:
-// CLI args > real env > .env.local > .env > default.
-// Usage: pnpm dev [port] [dataDir] | pnpm dev:ui [port] [dataDir]
+// Dev launcher: sets PORT/DATA_DIR from .env then delegates to the real
+// CLI (bin/10router.mjs), so `pnpm dev <command>` behaves exactly like the
+// published npm package. Args pass through verbatim — use the CLI's own
+// flags (e.g. `pnpm dev start --port 20128`). Bare `pnpm dev` shows help.
+// Precedence: CLI flags/real env > .env.local > .env > default.
+// Usage: pnpm dev [start|stop|status|logs|open|--help] [options]
+// Dev shows the prod update notice by default (bare `--update-preview` → 9.9.9).
+// Pass your own `--update-preview X.Y.Z` for a custom version, or
+// `--no-update-check` to silence it.
 
-const isUi = process.argv.includes("--ui");
-const args = process.argv.slice(2).filter((a) => a !== "--ui");
-const tag = isUi ? "dev:ui" : "dev";
+const ROOT = process.cwd();
+const args = process.argv.slice(2);
+
+// Dev preview of the prod update notice (never published behavior —
+// bin/10router.mjs stays silent in-repo without this flag).
+const previewArgs =
+  args.includes("--update-preview") || args.includes("--no-update-check")
+    ? args
+    : [...args, "--update-preview"];
 
 // Minimal .env reader (stdlib only) — the wrapper needs values before spawn.
 function loadEnvFiles() {
@@ -19,7 +29,7 @@ function loadEnvFiles() {
   for (const f of [".env", ".env.local"]) {
     let text;
     try {
-      text = fs.readFileSync(path.join(process.cwd(), f), "utf8");
+      text = fs.readFileSync(path.join(ROOT, f), "utf8");
     } catch {
       continue;
     }
@@ -42,25 +52,33 @@ const file = loadEnvFiles();
 const pick = (k) => process.env[k] || file[k] || "";
 const expand = (p) => (p === "~" || p.startsWith("~/") ? path.join(os.homedir(), p.slice(1)) : p);
 
-const port = args[0] || pick(isUi ? "DEV_UI_PORT" : "DEV_PORT") || (isUi ? "20129" : "20127");
-const rawDir = args[1] || pick(isUi ? "DEV_UI_DATA_DIR" : "DEV_DATA_DIR");
-const dataDir = rawDir ? expand(rawDir) : isUi ? path.join(os.homedir(), ".10router-dev") : "";
+const val = (s, l) => {
+  const i = args.findIndex((a) => a === s || a === l);
+  return i >= 0 ? args[i + 1] : undefined;
+};
+const port = val("--port", "-p") || pick("DEV_PORT") || "20127";
+const rawDir = pick("DEV_DATA_DIR");
+const dataDir = rawDir ? expand(rawDir) : path.join(os.homedir(), ".10router-dev");
 const baseUrl = `http://localhost:${port}`;
 
-console.log(`[${tag}] port=${port} DATA_DIR=${dataDir || "~/.10router (default)"}`);
+console.log(`[dev] port=${port} DATA_DIR=${dataDir}`);
 
-const child = spawn("pnpm", ["exec", "next", "dev", "--port", port], {
+const previewEnv = { ...process.env };
+if (previewArgs.includes("--update-preview")) {
+  // Preview the prod notice exactly as an npm user sees it (pnpm itself
+  // sets npm_config_user_agent=pnpm/…, which would render the pnpm variant).
+  previewEnv.npm_config_user_agent = `npm/11.0.0 node/v${process.versions.node}`;
+}
+
+const child = spawn(process.execPath, [path.join(ROOT, "bin", "10router.mjs"), ...previewArgs], {
   stdio: "inherit",
   shell: process.platform === "win32",
   env: {
-    ...process.env,
+    ...previewEnv,
     PORT: port,
-    ...(dataDir ? { DATA_DIR: dataDir } : {}),
-    // Separate distDir: Next dev lockfile lives in distDir, so a second
-    // dev server in the same repo refuses to start without this.
-    ...(isUi
-      ? { NEXT_DIST_DIR: ".next-dev-ui", BASE_URL: baseUrl, NEXT_PUBLIC_BASE_URL: baseUrl }
-      : {}),
+    DATA_DIR: dataDir,
+    BASE_URL: baseUrl,
+    NEXT_PUBLIC_BASE_URL: baseUrl,
   },
 });
 

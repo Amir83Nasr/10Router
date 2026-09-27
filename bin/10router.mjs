@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 // ── 10ROUTER CLI ────────────────────────────────────────────────────
-// Local lifecycle: start/stop/status/logs/open/doctor. No Docker.
-// Stdlib only (+ already-installed `open` for the `open` command).
+// Local lifecycle: start/stop/status/logs/open. No Docker.
+// Stdlib + already-installed `chalk` (colors, NO_COLOR-aware) and `open`.
 
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { checkUpdate } from "./update-check.mjs";
+import chalk from "chalk";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DEV_PORT = "20127";
@@ -64,14 +67,17 @@ async function health(port) {
   }
 }
 
+// ── UPDATE CHECK (npm mode only, fail-open, cached) ───────────────
+// Logic lives in ./update-check.mjs (side-effect-free, testable).
+
 // ── COMMANDS ────────────────────────────────────────────────────────
 async function cmdStart(opts) {
-  // npm-installed package has a prebuilt .next — default to prod there.
-  const mode = opts.dev && IS_REPO ? "dev" : opts.prod || !IS_REPO ? "prod" : "dev";
+  // npm-installed package has a prebuilt .next — always prod there.
+  const mode = IS_REPO ? "dev" : "prod";
   const port = opts.port || (mode === "prod" ? PROD_PORT : DEV_PORT);
   const st = readState();
   if (st && isAlive(st.pid)) {
-    console.log(`already running (pid ${st.pid}, ${st.mode} :${st.port})`);
+    console.log(chalk.yellow(`already running (pid ${st.pid}, ${st.mode} :${st.port})`));
     return;
   }
   if (st) fs.rmSync(PID_FILE, { force: true }); // stale pidfile
@@ -80,7 +86,7 @@ async function cmdStart(opts) {
   let cmd, args;
   if (mode === "prod") {
     if (!fs.existsSync(path.join(ROOT, ".next"))) {
-      console.error("no .next build found — run `pnpm build` first");
+      console.error(chalk.red("no .next build found — run `pnpm build` first"));
       process.exitCode = 1;
       return;
     }
@@ -93,7 +99,7 @@ async function cmdStart(opts) {
   }
 
   if (opts.foreground) {
-    console.log(`[${mode}] ${baseUrl(port)} (foreground, Ctrl+C to stop)`);
+    console.log(chalk.green(`[${mode}] ${baseUrl(port)} (foreground, Ctrl+C to stop)`));
     const child = spawn(cmd, args, { cwd: ROOT, stdio: "inherit", env });
     const stop = () => child.kill();
     process.once("SIGINT", stop);
@@ -116,8 +122,8 @@ async function cmdStart(opts) {
     PID_FILE,
     JSON.stringify({ pid: child.pid, port: String(port), mode, startedAt: Date.now() }),
   );
-  console.log(`started ${mode} (pid ${child.pid}) → ${baseUrl(port)}`);
-  console.log(`logs: ${LOG_FILE}`);
+  console.log(chalk.green(`started ${mode} (pid ${child.pid}) → ${baseUrl(port)}`));
+  console.log(chalk.dim(`logs: ${LOG_FILE}`));
 }
 
 function killTree(pid) {
@@ -139,17 +145,17 @@ function killTree(pid) {
 function cmdStop() {
   const st = readState();
   if (!st) {
-    console.log("not running (no pidfile)");
+    console.log(chalk.yellow("not running (no pidfile)"));
     return;
   }
   if (!isAlive(st.pid)) {
     fs.rmSync(PID_FILE, { force: true });
-    console.log("stale pidfile removed — was not running");
+    console.log(chalk.yellow("stale pidfile removed — was not running"));
     return;
   }
   killTree(st.pid);
   fs.rmSync(PID_FILE, { force: true });
-  console.log(`stopped (was pid ${st.pid}, ${st.mode} :${st.port})`);
+  console.log(chalk.green(`stopped (was pid ${st.pid}, ${st.mode} :${st.port})`));
 }
 
 async function cmdStatus() {
@@ -158,17 +164,19 @@ async function cmdStatus() {
   if (st && !alive) fs.rmSync(PID_FILE, { force: true }); // clean stale
   const port = st?.port || process.env.PORT;
   const ok = port ? await health(port) : false;
-  console.log(`running: ${alive ? `yes (pid ${st.pid}, ${st.mode})` : "no"}`);
+  console.log(
+    `running: ${alive ? chalk.green(`yes (pid ${st.pid}, ${st.mode})`) : chalk.red("no")}`,
+  );
   console.log(
     port
-      ? `health:  ${ok ? `ok ${baseUrl(port)}/api/health` : `down :${port}`}`
-      : "health:  — (nothing started, PORT unset)",
+      ? `health:  ${ok ? chalk.green(`ok ${baseUrl(port)}/api/health`) : chalk.red(`down :${port}`)}`
+      : `health:  ${chalk.dim("— (nothing started, PORT unset)")}`,
   );
-  console.log(`data:    ${DATA_DIR}`);
+  console.log(`data:    ${chalk.dim(DATA_DIR)}`);
   if (!alive) process.exitCode = 1;
 }
 
-function cmdLogs(opts) {
+function cmdLogs() {
   let text;
   try {
     text = fs.readFileSync(LOG_FILE, "utf8");
@@ -177,9 +185,7 @@ function cmdLogs(opts) {
     return;
   }
   const lines = text.trimEnd().split("\n");
-  const n = opts.n || 50;
-  process.stdout.write(lines.slice(-n).join("\n") + "\n");
-  if (!opts.follow) return;
+  process.stdout.write(lines.slice(-50).join("\n") + "\n");
   // follow: poll for appended bytes (cross-platform, no `tail` dep)
   let pos = fs.statSync(LOG_FILE).size;
   const timer = setInterval(() => {
@@ -208,68 +214,63 @@ async function cmdOpen(opts) {
   console.log(url);
 }
 
-function cmdDoctor() {
-  const fails = [];
-  const check = (name, ok, hint = "") => {
-    console.log(`${ok ? "ok  " : "FAIL"}  ${name}${ok ? "" : ` — ${hint}`}`);
-    if (!ok) fails.push(name);
-  };
-  const major = Number(process.versions.node.split(".")[0]);
-  check(`node ${process.version}`, major >= 20, "need node >= 20");
-  if (IS_REPO) {
-    const pnpm = spawnSync("pnpm", ["--version"], { encoding: "utf8" });
-    check(`pnpm ${pnpm.stdout?.trim() || "?"}`, pnpm.status === 0, "need pnpm for dev mode");
-  }
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.accessSync(DATA_DIR, fs.constants.W_OK);
-    check(`DATA_DIR ${DATA_DIR}`, true);
-  } catch {
-    check(`DATA_DIR ${DATA_DIR}`, false, "not writable");
-  }
-  check(
-    ".next build (for start --prod)",
-    fs.existsSync(path.join(ROOT, ".next")),
-    "run pnpm build",
-  );
-  if (fails.length) process.exitCode = 1;
-}
-
 function help() {
-  console.log(`10router — local gateway lifecycle (DATA_DIR=${DATA_DIR})
+  const H = chalk.green;
+  const C = chalk.blue;
+  console.log(`${H.bold("10router")} ${chalk.dim(`— local gateway lifecycle (DATA_DIR=${DATA_DIR})`)}
 
-usage: 10router <command> [options]
+${H("Usage:")} 10router [OPTIONS] <COMMAND>
 
-  start [--prod|--dev] [--port N] [--foreground]  start gateway
-                                   (repo default: dev :${DEV_PORT}; npm install: prod :${PROD_PORT})
-  stop                                        stop background gateway
-  status                                      pid alive? health? paths?
-  logs [-n N] [-f]                            tail log (default last 50 lines)
-  open [--port N]                             open dashboard in browser
-  doctor                                      node/pnpm/DATA_DIR/build checks
-  help | --help                               this text
-  --version                                   package version
+${H("Commands:")}
+  ${C("start")}   Start gateway
+  ${C("stop")}    Stop background gateway
+  ${C("status")}  Show pid, health and paths
+  ${C("logs")}    Tail log (follows)
+  ${C("open")}    Open dashboard in browser
 
-env: DATA_DIR (default ~/.10router), PORT. prod default :${PROD_PORT}.`);
+${H("Options:")}
+  ${C("-p, --port <N>")}    Gateway port (default :${PROD_PORT})
+  ${C("    --foreground")}  Run in foreground (Ctrl+C to stop)
+  ${C("-h, --help")}        Show this help
+  ${C("-V, --version")}     Show package version`);
 }
 
 // ── ARGS ────────────────────────────────────────────────────────────
-const [cmd, ...rest] = process.argv.slice(2);
+const _all = process.argv.slice(2);
+// Strip --update-preview [ver] before command dispatch (dev preview only).
+const _pv = _all.indexOf("--update-preview");
+const _args =
+  _pv >= 0 && _all[_pv + 1] && /^[v\d]/.test(_all[_pv + 1])
+    ? [..._all.slice(0, _pv), ..._all.slice(_pv + 2)]
+    : _pv >= 0
+      ? [..._all.slice(0, _pv), ..._all.slice(_pv + 1)]
+      : _all;
+const [cmd, ...rest] = _args;
 const flag = (s, l) => rest.includes(s) || (l && rest.includes(l));
 const val = (s, l) => {
   const i = rest.findIndex((a) => a === s || a === l);
   return i >= 0 ? rest[i + 1] : undefined;
 };
 const opts = {
-  prod: flag("--prod"),
-  dev: flag("--dev"),
   foreground: flag("--foreground") || flag("--fg"),
-  follow: flag("-f", "--follow"),
   port: val("--port", "-p"),
-  n: Number(val("-n", "--lines")) || undefined,
 };
 
 const run = async () => {
+  // Update notice: stderr only (stdout stays pipeable), fail-open, npm-only.
+  // Dev preview: `--update-preview [ver] <cmd>` shows the prod notice in-repo.
+  const previewIdx = _all.indexOf("--update-preview");
+  const previewArg = previewIdx >= 0 ? _all[previewIdx + 1] : null;
+  const previewLatest =
+    previewIdx >= 0 ? (previewArg && /^[v\d]/.test(previewArg) ? previewArg : "9.9.9") : null;
+  const notice = await checkUpdate({
+    root: ROOT,
+    dataDir: DATA_DIR,
+    isRepo: IS_REPO,
+    argv: rest,
+    previewLatest,
+  });
+  if (notice) console.error(chalk.yellow.bold(notice));
   switch (cmd) {
     case "start":
       return cmdStart(opts);
@@ -278,20 +279,22 @@ const run = async () => {
     case "status":
       return cmdStatus();
     case "logs":
-      return cmdLogs(opts);
+      return cmdLogs();
     case "open":
       return cmdOpen(opts);
-    case "doctor":
-      return cmdDoctor();
-    case "--version":
-    case "version": {
+    case "-h":
+    case "--help":
+    case "help":
+      return help();
+    case "-V":
+    case "--version": {
       const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
       console.log(pkg.version);
       return;
     }
     default:
       help();
-      if (cmd && cmd !== "help" && cmd !== "--help") process.exitCode = 1;
+      if (cmd) process.exitCode = 1;
   }
 };
 

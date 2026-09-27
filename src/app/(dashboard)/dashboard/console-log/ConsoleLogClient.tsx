@@ -21,10 +21,18 @@ import type { LogCategory, LogEntry, LogLevel } from "@/lib/logLine.js";
 // ── LEVEL META ───────────────────────────────────────────
 
 const LEVEL_BADGE: Record<LogLevel, "default" | "secondary" | "destructive"> = {
-  debug: "default",
-  info: "secondary",
+  debug: "secondary",
+  info: "default",
   warn: "secondary",
   error: "destructive",
+};
+
+// Badge color per level (BADGE variants are limited: default/secondary/destructive).
+const LEVEL_BADGE_CLASS: Record<LogLevel, string> = {
+  debug: "bg-muted text-muted-foreground",
+  info: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
+  warn: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  error: "",
 };
 
 const LEVEL_LABEL: Record<LogLevel, string> = {
@@ -174,6 +182,7 @@ function LogMessage({ text, isError }: { text: string; isError: boolean }) {
 
 function LogRow({ entry }: { entry: LogEntry }) {
   const isError = entry.level === "error";
+  const isWarn = entry.level === "warn";
   const isDone = entry.category === "done";
 
   return (
@@ -181,15 +190,20 @@ function LogRow({ entry }: { entry: LogEntry }) {
       className={`flex items-start gap-2 px-3 py-1.5 leading-relaxed ${
         isError
           ? "border-l-2 border-red-500 bg-red-500/5"
-          : isDone
-            ? "border-l-2 border-green-500 bg-green-500/5"
-            : "border-l-2 border-transparent hover:bg-muted/50"
+          : isWarn
+            ? "border-l-2 border-amber-500 bg-amber-500/5"
+            : isDone
+              ? "border-l-2 border-green-500 bg-green-500/5"
+              : "border-l-2 border-transparent hover:bg-muted/50"
       }`}
     >
       <span className="shrink-0 pt-0.5 text-[11px] text-muted-foreground tabular-nums">
         {formatClock(entry.ts)}
       </span>
-      <Badge variant={LEVEL_BADGE[entry.level]} className="shrink-0">
+      <Badge
+        variant={LEVEL_BADGE[entry.level]}
+        className={`shrink-0 ${LEVEL_BADGE_CLASS[entry.level]}`}
+      >
         {LEVEL_LABEL[entry.level]}
       </Badge>
       <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase">

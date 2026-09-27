@@ -2,7 +2,6 @@
 import Icon from "@/shared/components/Icon";
 
 import { useState } from "react";
-import PropTypes from "prop-types";
 import ChangelogModal from "./ChangelogModal";
 import { useShutdown } from "@/shared/hooks/useShutdown";
 import ShutdownModal from "./ShutdownModal";
@@ -69,7 +68,3 @@ export default function HeaderMenu({ onLogout }: HeaderMenuProps) {
     </>
   );
 }
-
-HeaderMenu.propTypes = {
-  onLogout: PropTypes.func.isRequired,
-};

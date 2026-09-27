@@ -2,7 +2,6 @@
 import Icon from "@/shared/components/Icon";
 
 import { useState, useEffect } from "react";
-import PropTypes from "prop-types";
 import Modal from "./Modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -205,9 +204,3 @@ export default function CursorAuthModal({ isOpen, onSuccess, onClose }: CursorAu
     </Modal>
   );
 }
-
-CursorAuthModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onSuccess: PropTypes.func,
-  onClose: PropTypes.func.isRequired,
-};

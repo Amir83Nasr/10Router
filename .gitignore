@@ -41,7 +41,6 @@ gitbooks/*
 gitbook/README.md
 
 # ─── BUILD / DIST ─────────────────────────────────────────
-/.next-dev-ui/
 /.next/
 /.next-cli-build/
 /out/
@@ -59,6 +58,7 @@ next-env.d.ts
 .pnp.*
 .yarn/*
 package-lock.json
+.pnpm-store/
 
 # ─── BACKUPS ──────────────────────────────────────────────
 open-sse.old/

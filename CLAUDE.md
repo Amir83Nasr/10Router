@@ -13,8 +13,9 @@ Code: `src/` (Next.js app + dashboard/compat APIs + `src/sse/` entry glue), `ope
 ```bash
 cp .env.example .env
 pnpm install
-pnpm dev      # scripts/dev-local.mjs (port 20127); pnpm dev:ui → isolated UI server 20129 + DATA_DIR ~/.10router-dev
-pnpm build && pnpm start   # production, port 20127
+pnpm dev [cmd] # real CLI via scripts/dev-local.mjs (20127, ~/.10router-dev); bare = help
+pnpm pkg:test   # pre-publish npm package test (same 20127 + ~/.10router-dev as dev)
+pnpm build && pnpm start   # production, port 20128
 ```
 
 - Runtime default `PORT` is 20128 (`.env.example`, Dockerfile); dev scripts use 20127. Dashboard `/dashboard`, API `/v1`.

@@ -2,7 +2,6 @@
 import Icon from "@/shared/components/Icon";
 
 import { useCallback, useEffect, useState } from "react";
-import PropTypes from "prop-types";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
@@ -172,7 +171,3 @@ export default function NoAuthProxyCard({ providerId }: NoAuthProxyCardProps) {
     </Card>
   );
 }
-
-NoAuthProxyCard.propTypes = {
-  providerId: PropTypes.string.isRequired,
-};

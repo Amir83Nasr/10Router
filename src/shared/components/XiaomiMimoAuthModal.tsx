@@ -2,7 +2,6 @@
 import Icon from "@/shared/components/Icon";
 
 import { useState, useEffect } from "react";
-import PropTypes from "prop-types";
 import Modal from "./Modal";
 import { Button } from "@/components/ui/button";
 
@@ -269,9 +268,3 @@ export default function XiaomiMimoAuthModal({
     </Modal>
   );
 }
-
-XiaomiMimoAuthModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onSuccess: PropTypes.func,
-  onClose: PropTypes.func.isRequired,
-};

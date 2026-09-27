@@ -2,7 +2,6 @@
 import Icon from "@/shared/components/Icon";
 
 import { useState } from "react";
-import PropTypes from "prop-types";
 import { Loader2 } from "lucide-react";
 import Modal from "./Modal";
 import OAuthModal from "./OAuthModal";
@@ -285,10 +284,3 @@ export default function GitLabAuthModal({
     </Modal>
   );
 }
-
-GitLabAuthModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  providerInfo: PropTypes.shape({ name: PropTypes.string }),
-  onSuccess: PropTypes.func,
-  onClose: PropTypes.func.isRequired,
-};

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import PropTypes from "prop-types";
 import { Loader2 } from "lucide-react";
 import Modal from "./Modal";
 import { Button } from "@/components/ui/button";
@@ -132,9 +131,3 @@ export default function IFlowCookieModal({ isOpen, onSuccess, onClose }: IFlowCo
     </Modal>
   );
 }
-
-IFlowCookieModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onSuccess: PropTypes.func,
-  onClose: PropTypes.func,
-};

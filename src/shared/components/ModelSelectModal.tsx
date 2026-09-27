@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import PropTypes from "prop-types";
 import { Check, Info, Layers, PenLine, Search, SearchX } from "lucide-react";
 import {
   Dialog,
@@ -735,21 +734,3 @@ export default function ModelSelectModal({
     </Dialog>
   );
 }
-
-ModelSelectModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onClose: PropTypes.func.isRequired,
-  onSelect: PropTypes.func.isRequired,
-  onDeselect: PropTypes.func,
-  selectedModel: PropTypes.string,
-  activeProviders: PropTypes.arrayOf(
-    PropTypes.shape({
-      provider: PropTypes.string.isRequired,
-    }),
-  ),
-  title: PropTypes.string,
-  modelAliases: PropTypes.object,
-  kindFilter: PropTypes.string,
-  addedModelValues: PropTypes.arrayOf(PropTypes.string),
-  closeOnSelect: PropTypes.bool,
-};

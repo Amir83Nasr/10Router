@@ -2,7 +2,6 @@
 import Icon from "@/shared/components/Icon";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import PropTypes from "prop-types";
 import Modal from "./Modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -1043,13 +1042,3 @@ export default function OAuthModal({
     </Modal>
   );
 }
-
-OAuthModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  provider: PropTypes.string,
-  providerInfo: PropTypes.shape({ name: PropTypes.string }),
-  onSuccess: PropTypes.func,
-  onClose: PropTypes.func.isRequired,
-  /** Extra metadata passed to /authorize and /exchange (e.g. gitlab clientId/baseUrl) */
-  oauthMeta: PropTypes.object,
-};

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import PropTypes from "prop-types";
 import Modal from "./Modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -205,16 +204,3 @@ export default function AddCustomEmbeddingModal({
     </Modal>
   );
 }
-
-AddCustomEmbeddingModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onClose: PropTypes.func.isRequired,
-  onCreated: PropTypes.func,
-  onSaved: PropTypes.func,
-  node: PropTypes.shape({
-    id: PropTypes.string,
-    name: PropTypes.string,
-    prefix: PropTypes.string,
-    baseUrl: PropTypes.string,
-  }),
-};

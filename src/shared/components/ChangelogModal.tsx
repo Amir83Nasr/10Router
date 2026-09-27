@@ -2,7 +2,6 @@
 import Icon from "@/shared/components/Icon";
 
 import { useEffect, useState } from "react";
-import PropTypes from "prop-types";
 import { marked } from "marked";
 import { GITHUB_CONFIG } from "@/shared/constants/config";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -75,8 +74,3 @@ export default function ChangelogModal({ isOpen, onClose }: ChangelogModalProps)
     </Dialog>
   );
 }
-
-ChangelogModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onClose: PropTypes.func.isRequired,
-};

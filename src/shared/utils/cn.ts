@@ -1,7 +1,6 @@
-// Utility: merge class names (clsx + tailwind-merge).
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+// Utility: merge class names (cn package = clsx + tailwind-merge).
+import { cn as cnMerge, type ClassValue } from "cn";
 
 export function cn(...inputs: ClassValue[]): string {
-  return twMerge(clsx(...inputs));
+  return cnMerge(...inputs);
 }

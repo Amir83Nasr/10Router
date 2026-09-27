@@ -42,7 +42,8 @@ function scheduleFlush() {
   state.flushTimer?.unref?.();
 }
 
-// Strip ANSI escape codes so terminal colors don't bleed into UI
+// Strip ANSI escape codes (colors, bold) so terminal styling doesn't bleed
+// into UI; the viewer applies its own per-level colors.
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
 function stripAnsi(str) {

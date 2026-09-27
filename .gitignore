@@ -10,6 +10,8 @@ docs/*
 PR/*
 .PR/
 .claude/
+.codex/
+.agents/
 .docs/
 .repo/
 .script/

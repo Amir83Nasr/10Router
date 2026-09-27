@@ -74,6 +74,7 @@ describe("checkUpdate", () => {
       dataDir,
       isRepo: false,
       argv: [],
+      env: {},
       fetchFn: counting,
     });
     expect(fetched).toBe(0);
@@ -115,7 +116,14 @@ describe("checkUpdate", () => {
       path.join(dataDir, "update-check.json"),
       JSON.stringify({ latest: "0.5.0", checkedAt: 0 }),
     );
-    const stale = await checkUpdate({ root: dir, dataDir, isRepo: false, argv: [], fetchFn: down });
+    const stale = await checkUpdate({
+      root: dir,
+      dataDir,
+      isRepo: false,
+      argv: [],
+      env: {},
+      fetchFn: down,
+    });
     expect(stale).toContain("0.5.0");
   });
 
@@ -129,6 +137,7 @@ describe("checkUpdate", () => {
       dataDir,
       isRepo: true,
       argv: [],
+      env: {},
       previewLatest: "9.9.9",
       fetchFn: never,
     });

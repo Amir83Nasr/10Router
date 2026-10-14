@@ -906,7 +906,7 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         const res = await fetchWithConnectionProxy(
           "https://opencode.ai/zen/v1/models",
           {
-            headers: { Authorization: "Bearer public", "User-Agent": "opencode/1.18.31" },
+            headers: { Authorization: "Bearer public", "User-Agent": "opencode/1.18.35" },
           },
           effectiveProxy,
         );

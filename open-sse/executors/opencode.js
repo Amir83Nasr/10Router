@@ -26,7 +26,7 @@ import {
 // `noauth` virtual connection (Authorization: Bearer public for everyone).
 const FREE_USAGE_BREAKER_KEY = "opencode-free";
 
-const OPENCODE_UA = "opencode/1.18.31";
+const OPENCODE_UA = "opencode/1.18.35";
 const MAX_SESSION_LENGTH = 256;
 const MAX_TOOL_NAME_LEN = 128;
 const SESSION_HEADER = "x-opencode-session";
@@ -156,16 +156,33 @@ export function translateSessionId(sessionId, clientTool = "") {
   if (typeof sessionId === "string" && OPENCODE_SESSION_RE.test(sessionId.trim())) {
     return sessionId.trim();
   }
+  const key = `translated:${clientTool || "generic"}:${sessionId || ""}`;
+  const existing = stableOpencodeSessions.get(key);
+  if (existing) {
+    existing.lastUsed = Date.now();
+    return existing.sessionId;
+  }
   const digest = crypto
     .createHash("sha256")
     .update(`opencode\0${clientTool || "generic"}\0${sessionId || ""}`)
     .digest();
-  const timeHex = digest.subarray(0, 6).toString("hex");
+  const current = BigInt(Date.now()) * 0x1000n + 1n;
+  const value = ~current;
+  const timeHex = Array.from({ length: 6 }, (_, index) =>
+    Number((value >> BigInt(40 - 8 * index)) & 0xffn)
+      .toString(16)
+      .padStart(2, "0")
+  ).join("");
   let randomPart = "";
-  for (let i = 6; i < 20; i++) {
+  for (let i = 0; i < 14; i++) {
     randomPart += BASE62_CHARS[digest[i] % 62];
   }
-  return `ses_${timeHex}${randomPart}`;
+  const sid = `ses_${timeHex}${randomPart}`;
+  if (stableOpencodeSessions.size >= MAX_STABLE_SESSIONS) {
+    stableOpencodeSessions.delete(stableOpencodeSessions.keys().next().value);
+  }
+  stableOpencodeSessions.set(key, { sessionId: sid, lastUsed: Date.now() });
+  return sid;
 }
 
 function normalizeSession(value) {
@@ -267,14 +284,19 @@ function lastUserText(body) {
 // session plus the last user message so retries share the id.
 export function deriveRequestId(sessionId, body) {
   const text = lastUserText(body);
-  if (!text) return generateRequestId();
+  const current = BigInt(Date.now()) * 0x1000n + 1n;
+  const timeHex = Array.from({ length: 6 }, (_, index) =>
+    Number((current >> BigInt(40 - 8 * index)) & 0xffn)
+      .toString(16)
+      .padStart(2, "0")
+  ).join("");
+  if (!text) return `msg_${timeHex}${unstableRandom()}`;
   const digest = crypto
     .createHash("sha256")
     .update(`opencode-req\0${sessionId || ""}\0${text}`)
     .digest();
-  const timeHex = digest.subarray(0, 6).toString("hex");
   let randomPart = "";
-  for (let i = 6; i < 20; i++) {
+  for (let i = 0; i < 14; i++) {
     randomPart += BASE62_CHARS[digest[i] % 62];
   }
   const id = `msg_${timeHex}${randomPart}`;
@@ -606,8 +628,9 @@ export class OpenCodeExecutor extends BaseExecutor {
       "Content-Type": "application/json",
       Authorization: "Bearer public",
       "User-Agent": isOpencodeDownstream ? downstreamUa : OPENCODE_UA,
-      "x-opencode-client": lower["x-opencode-client"] || "desktop",
+      "x-opencode-client": lower["x-opencode-client"] || "cli",
       "x-opencode-session": session,
+      "x-opencode-session-id": session,
       "x-opencode-request": requestId,
       "x-opencode-project": lower["x-opencode-project"] || "global",
       Accept: stream ? "text/event-stream" : "*/*",

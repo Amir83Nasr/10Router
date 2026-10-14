@@ -2,6 +2,18 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.3] — 2026-10-14
+
+- Prettier formatting fixes (opencode executors, golden test).
+- Golden snapshot updated for `is_error` boolean on Claude `tool_result` blocks.
+
+## [0.1.2] — 2026-10-14
+
+- OpenAI→Claude: always emit `is_error` boolean on `tool_result` blocks
+  (Zed's strict parser requires it; Anthropic treats it as optional).
+- OpenCode executor: request headers aligned to prevent 403 FreeTierError.
+- CLI: `checkUpdate` tests pass explicit env so `CI=true` guard doesn't silence them.
+
 ## [0.1.1] — 2026-09-27
 
 - CLI: colored output (NO_COLOR-aware), npm update-check notice (fail-open, cached), npm installs always run prod, `logs` follows, `doctor` removed.

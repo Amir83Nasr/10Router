@@ -184,7 +184,9 @@ describe("openaiToClaudeRequest", () => {
       messages: [
         {
           role: "assistant",
-          tool_calls: [{ id: "call_1", type: "function", function: { name: "read", arguments: "{}" } }],
+          tool_calls: [
+            { id: "call_1", type: "function", function: { name: "read", arguments: "{}" } },
+          ],
         },
         { role: "tool", tool_call_id: "call_1", content: "ok" },
       ],
@@ -201,7 +203,9 @@ describe("openaiToClaudeRequest", () => {
         messages: [
           {
             role: "user",
-            content: [{ type: "tool_result", tool_use_id: "call_1", content: "boom", is_error: true }],
+            content: [
+              { type: "tool_result", tool_use_id: "call_1", content: "boom", is_error: true },
+            ],
           },
         ],
       };

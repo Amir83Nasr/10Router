@@ -171,7 +171,7 @@ export function translateSessionId(sessionId, clientTool = "") {
   const timeHex = Array.from({ length: 6 }, (_, index) =>
     Number((value >> BigInt(40 - 8 * index)) & 0xffn)
       .toString(16)
-      .padStart(2, "0")
+      .padStart(2, "0"),
   ).join("");
   let randomPart = "";
   for (let i = 0; i < 14; i++) {
@@ -288,7 +288,7 @@ export function deriveRequestId(sessionId, body) {
   const timeHex = Array.from({ length: 6 }, (_, index) =>
     Number((current >> BigInt(40 - 8 * index)) & 0xffn)
       .toString(16)
-      .padStart(2, "0")
+      .padStart(2, "0"),
   ).join("");
   if (!text) return `msg_${timeHex}${unstableRandom()}`;
   const digest = crypto

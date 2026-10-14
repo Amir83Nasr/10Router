@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 
@@ -90,6 +91,33 @@ fs.rmSync(path.join(ROOT, tgz)); // keep repo clean
 const pkgDir = path.join(sandbox, "node_modules", "@amir83nasr", "10router");
 if (fs.existsSync(path.join(pkgDir, "pnpm-lock.yaml"))) {
   console.error("[pkg:test] sandbox looks like a repo checkout — abort");
+  process.exit(1);
+}
+
+// The tarball ships a prebuilt .next — `dependencies.next` must be an exact
+// pin and the sandbox must resolve exactly that version, or runtime reads
+// manifests the build never wrote (next 16.4.0 preview-props.json ENOENT on
+// a 16.3.5 build). A range can resolve fine today and skew on the next
+// next.js release, so reject ranges regardless of what npm resolved.
+const readVersion = (p) => JSON.parse(fs.readFileSync(p, "utf8")).version;
+const packedNext = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"))
+  .dependencies.next;
+if (!/^\d+\.\d+\.\d+$/.test(packedNext)) {
+  console.error(
+    `[pkg:test] dependencies.next is "${packedNext}" — must be an exact version (tarball ships prebuilt .next)`,
+  );
+  process.exit(1);
+}
+const builtWith = readVersion(path.join(ROOT, "node_modules", "next", "package.json"));
+// Resolve next the way custom-server.js does at runtime (from the package),
+// not a hardcoded hoisted path — npm may nest it under pkgDir/node_modules.
+const installed = readVersion(
+  createRequire(path.join(pkgDir, "package.json")).resolve("next/package.json"),
+);
+if (installed !== builtWith || installed !== packedNext) {
+  console.error(
+    `[pkg:test] next version skew: .next built with ${builtWith}, packed pin ${packedNext}, sandbox installed ${installed}`,
+  );
   process.exit(1);
 }
 

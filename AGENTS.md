@@ -16,6 +16,8 @@ when MERGING from REMOTE into LOCAL: review every incoming change and convert it
 
 LOCAL has PRIORITY: the project is heavily customized locally — never let a remote merge overwrite or break local personalization. On conflict, keep the LOCAL version.
 
+انتشار نسخه جدید با تگ جدید از طریق گیت‌هاب اکشن صورت می‌گیره به صورت خودکار.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 <!-- END:nextjs-agent-rules -->

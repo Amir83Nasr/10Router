@@ -2,6 +2,11 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.5] — 2026-10-15
+
+- Fix: pin `next` to exact `16.3.5` in package dependencies to prevent runtime ENOENT on `preview-props.json` when npm resolves `next@16.4.0` against a prebuilt `.next` artifact.
+- CLI: add pre-publish package test guard verifying exact `dependencies.next` pin and detecting version skew against the prebuilt bundle.
+
 ## [0.1.4] — 2026-10-14
 
 - OpenCode Go: catalog synced to v2 API (`grok-4.7`, `gpt-6-luna`, `mimo-v2.6-flash/pro`, `space-bunny-free`, `longcat-2.5-preview-free`; removed `minimax-m2.5`, `qwen3.7-max`, `qwen3.6-plus`; `deepseek-v4.1-flash`).

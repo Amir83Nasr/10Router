@@ -178,6 +178,38 @@ describe("openaiToClaudeRequest", () => {
       expect(result.tool_choice).toBeUndefined();
     });
   });
+
+  describe("tool_result is_error", () => {
+    const toolBody = {
+      messages: [
+        {
+          role: "assistant",
+          tool_calls: [{ id: "call_1", type: "function", function: { name: "read", arguments: "{}" } }],
+        },
+        { role: "tool", tool_call_id: "call_1", content: "ok" },
+      ],
+    };
+
+    it("always emits is_error:false on role=tool results (Zed strict parser)", () => {
+      const result = openaiToClaudeRequest("claude-sonnet-4.5", toolBody, false);
+      const block = result.messages.flatMap((m) => m.content).find((b) => b.type === "tool_result");
+      expect(block.is_error).toBe(false);
+    });
+
+    it("normalizes truthy is_error to true on Claude-format parts", () => {
+      const body = {
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "tool_result", tool_use_id: "call_1", content: "boom", is_error: true }],
+          },
+        ],
+      };
+      const result = openaiToClaudeRequest("claude-sonnet-4.5", body, false);
+      const block = result.messages.flatMap((m) => m.content).find((b) => b.type === "tool_result");
+      expect(block.is_error).toBe(true);
+    });
+  });
 });
 
 describe("openaiToClaudeResponse", () => {

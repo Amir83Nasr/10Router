@@ -224,6 +224,9 @@ function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
       type: CLAUDE_BLOCK.TOOL_RESULT,
       tool_use_id: msg.tool_call_id,
       content: msg.content,
+      // Zed's strict parser requires is_error on every tool_result (Anthropic
+      // treats it as optional, default false) — always emit the boolean.
+      is_error: msg.is_error === true,
     });
   } else if (msg.role === ROLE.USER) {
     if (typeof msg.content === "string") {
@@ -239,7 +242,7 @@ function getContentBlocksFromMessage(msg, toolNameMap = new Map()) {
             type: CLAUDE_BLOCK.TOOL_RESULT,
             tool_use_id: part.tool_use_id,
             content: part.content,
-            ...(part.is_error && { is_error: part.is_error }),
+            is_error: part.is_error === true,
           });
         } else if (part.type === OPENAI_BLOCK.IMAGE_URL) {
           const url = part.image_url.url;

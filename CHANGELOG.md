@@ -2,6 +2,13 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.4] — 2026-10-14
+
+- OpenCode Go: catalog synced to v2 API (`grok-4.7`, `gpt-6-luna`, `mimo-v2.6-flash/pro`, `space-bunny-free`, `longcat-2.5-preview-free`; removed `minimax-m2.5`, `qwen3.7-max`, `qwen3.6-plus`; `deepseek-v4.1-flash`).
+- OpenCode Zen: executor routes all responses-family models (GPT/Grok/Muse Spark) to `/zen/v1/responses` from the registry instead of Muse Spark only — fixes GPT/Grok requests hitting `/chat/completions`.
+- OpenCode / Zen: dead `/zen/v1/models` catalog URL and dashboard probe replaced with live `/inference/v1/models` from the v2 docs.
+- Tests: Go catalog synced to the v2 endpoint table; new Zen responses-routing regression test.
+
 ## [0.1.3] — 2026-10-14
 
 - Prettier formatting fixes (opencode executors, golden test).

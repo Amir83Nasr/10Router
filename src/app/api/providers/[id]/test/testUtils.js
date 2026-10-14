@@ -899,14 +899,14 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         return { valid, error: valid ? null : "Session expired — re-paste cookie" };
       }
       case "opencode": {
-        // Connectivity-only probe: GET /models never exercises the Responses
+        // Connectivity-only probe: GET /inference/v1/models never exercises the Responses
         // tool path, so a green dashboard test does NOT rule out 403
         // FreeTierError on POST /zen/v1/responses with tools (requires
         // bash+read decoys + tool_choice auto — see OpenCodeExecutor).
         const res = await fetchWithConnectionProxy(
-          "https://opencode.ai/zen/v1/models",
+          "https://opencode.ai/inference/v1/models",
           {
-            headers: { Authorization: "Bearer public", "User-Agent": "opencode/1.18.35" },
+            headers: { "User-Agent": "opencode/1.18.35" },
           },
           effectiveProxy,
         );

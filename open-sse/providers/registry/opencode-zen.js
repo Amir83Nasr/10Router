@@ -24,7 +24,8 @@ export default {
     },
   },
   // Multi-endpoint: pick the transport matching the client sourceFormat to skip
-  // translation. Mirrors opencode-go, pointed at /zen/v1 (see https://opencode.ai/docs/zen/).
+  // translation. Mirrors opencode-go, pointed at /zen/v1 (endpoint families per
+  // https://opencode.ai/v2/docs/console/inference, Go table at /v2/docs/console/go).
   transports: [
     {
       format: "openai",
@@ -42,8 +43,8 @@ export default {
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
     },
   ],
-  // supportedFormats follow the endpoint table in https://opencode.ai/docs/zen/
-  // (live /zen/v1/models, 2026-09-18: 71 ids).
+  // supportedFormats follow the per-model API families (chat completions /
+  // messages / responses) documented in https://opencode.ai/v2/docs/console/inference.
   models: [
     // Claude (messages)
     { id: "claude-fable-5", name: "Claude Fable 5", supportedFormats: ["claude"] },
@@ -288,7 +289,8 @@ export default {
       "User-Agent": "opencode/1.18.35",
     },
   },
-  modelsFetcher: { url: "https://opencode.ai/zen/v1/models", type: "opencode-free" },
+  // Live catalog per https://opencode.ai/v2/docs/console/inference (unauth GET).
+  modelsFetcher: { url: "https://opencode.ai/inference/v1/models", type: "opencode-free" },
   passthroughModels: true,
   features: {
     usage: true,

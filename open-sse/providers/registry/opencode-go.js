@@ -11,7 +11,7 @@ export default {
     textIcon: "OC",
     website: "https://opencode.ai/auth",
     notice: {
-      text: "OpenCode Go subscription: $5/mo (then 10/mo). Access to Kimi, GLM, Qwen, MiMo, MiniMax models.",
+      text: "OpenCode Go: $10/mo, Go Plus $40/mo. Access to Kimi, GLM, Qwen, MiMo, MiniMax models.",
       apiKeyUrl: "https://opencode.ai/auth",
     },
   },
@@ -43,9 +43,9 @@ export default {
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
     },
   ],
-  // supportedFormats follow the endpoint table in https://opencode.ai/docs/go/
+  // supportedFormats follow the endpoint table in https://opencode.ai/v2/docs/console/go
   models: [
-    { id: "deepseek-flash", name: "DeepSeek V4.1 Flash", supportedFormats: ["openai"] },
+    { id: "deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash", supportedFormats: ["openai"] },
     { id: "glm-5.3-flash", name: "GLM 5.3 Flash (Vision)", supportedFormats: ["openai"] },
     { id: "glm-5.3", name: "GLM 5.3", supportedFormats: ["openai"] },
     { id: "glm-5.2", name: "GLM 5.2", supportedFormats: ["openai"] },
@@ -69,23 +69,40 @@ export default {
       supportedFormats: ["openai", "claude", "openai-responses"],
     },
     { id: "longcat-2.0", name: "LongCat 2.0", supportedFormats: ["openai"] },
+    { id: "mimo-v2.6-flash", name: "MiMo V2.6 Flash", supportedFormats: ["openai"] },
+    { id: "mimo-v2.6-pro", name: "MiMo V2.6 Pro", supportedFormats: ["openai"] },
     { id: "mimo-v2.5", name: "MiMo V2.5", supportedFormats: ["openai"] },
     { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro", supportedFormats: ["openai"] },
     { id: "minimax-m3", name: "MiniMax M3", supportedFormats: ["openai", "claude"] },
     { id: "minimax-m2.7", name: "MiniMax M2.7", supportedFormats: ["openai", "claude"] },
-    { id: "minimax-m2.5", name: "MiniMax M2.5", supportedFormats: ["openai", "claude"] },
     { id: "qwen3.8-max", name: "Qwen 3.8 Max", supportedFormats: ["openai", "claude"] },
     { id: "qwen3.8-flash", name: "Qwen 3.8 Flash", supportedFormats: ["openai", "claude"] },
-    { id: "qwen3.7-max", name: "Qwen 3.7 Max", supportedFormats: ["openai", "claude"] },
     { id: "qwen3.7-plus", name: "Qwen 3.7 Plus", supportedFormats: ["openai", "claude"] },
-    { id: "qwen3.6-plus", name: "Qwen 3.6 Plus", supportedFormats: ["openai", "claude"] },
     { id: "hy4-preview", name: "Hy4 Preview", supportedFormats: ["openai"] },
     { id: "hy3", name: "Hy3", supportedFormats: ["openai"] },
+    { id: "space-bunny-free", name: "Space Bunny Free", supportedFormats: ["openai"] },
+    {
+      id: "longcat-2.5-preview-free",
+      name: "LongCat 2.5 Preview Free",
+      supportedFormats: ["openai"],
+    },
     // Served by /zen/go/v1/responses only — the responses-only entry forces chatCore
     // past the sourceFormat-matched transports into translation (see chatCore guard).
     {
+      id: "grok-4.7",
+      name: "Grok 4.7",
+      targetFormat: "openai-responses",
+      supportedFormats: ["openai-responses"],
+    },
+    {
       id: "grok-4.6",
       name: "Grok 4.6",
+      targetFormat: "openai-responses",
+      supportedFormats: ["openai-responses"],
+    },
+    {
+      id: "gpt-6-luna",
+      name: "GPT 6 Luna",
       targetFormat: "openai-responses",
       supportedFormats: ["openai-responses"],
     },

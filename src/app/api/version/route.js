@@ -3,7 +3,7 @@ import { getLatestVersion, isNewerVersion } from "@/lib/versionCheck";
 
 export async function GET() {
   const currentVersion = pkg.version;
-  // Fail-open: GitHub unreachable → latestVersion falls back to current.
+  // Fail-open: npm registry unreachable → latestVersion falls back to current.
   const { version, reason } = await getLatestVersion();
   const latestVersion = version || currentVersion;
   return Response.json({

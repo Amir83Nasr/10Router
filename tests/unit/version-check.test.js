@@ -27,27 +27,33 @@ describe("versionCheck: normalize/compare", () => {
 describe("versionCheck: getLatestVersion", () => {
   beforeEach(() => __resetVersionCache());
 
-  it("picks highest semver tag, ignores non-release tags", async () => {
+  it("reads version from npm /latest payload", async () => {
     const fetchFn = async () => ({
       ok: true,
-      json: async () => [
-        { name: "v0.5.83" },
-        { name: "latest" },
-        { name: "v0.5.85" },
-        { name: "v0.5.84" },
-      ],
+      json: async () => ({ name: "@amir83nasr/10router", version: "0.5.85" }),
     });
     expect((await getLatestVersion({ fetchFn, now: () => 1 })).version).toBe("0.5.85");
+  });
+
+  it("hits the npm registry, not GitHub", async () => {
+    let seenUrl;
+    const fetchFn = async (url) => {
+      seenUrl = String(url);
+      return { ok: true, json: async () => ({ version: "1.0.0" }) };
+    };
+    await getLatestVersion({ fetchFn, now: () => 1 });
+    expect(seenUrl).toContain("registry.npmjs.org");
+    expect(seenUrl).not.toContain("api.github.com");
   });
 
   it("reports source reason", async () => {
     const fetchFn = async () => ({
       ok: true,
-      json: async () => [{ name: "v0.5.85" }],
+      json: async () => ({ version: "0.5.85" }),
     });
     expect(await getLatestVersion({ fetchFn, now: () => 1 })).toEqual({
       version: "0.5.85",
-      reason: "github",
+      reason: "npm",
     });
   });
 
@@ -62,7 +68,14 @@ describe("versionCheck: getLatestVersion", () => {
     const fetchFn = async () => ({ ok: false, status: 403 });
     const res = await getLatestVersion({ fetchFn, now: () => 1 });
     expect(res.version).toBeNull();
-    expect(res.reason).toBe("github-403");
+    expect(res.reason).toBe("npm-403");
+  });
+
+  it("fail-open: payload without version returns null", async () => {
+    const fetchFn = async () => ({ ok: true, json: async () => ({}) });
+    const res = await getLatestVersion({ fetchFn, now: () => 1 });
+    expect(res.version).toBeNull();
+    expect(res.reason).toBe("no-version");
   });
 
   it("cooldowns failed fetches, still serves stale cache", async () => {
@@ -79,7 +92,7 @@ describe("versionCheck: getLatestVersion", () => {
     expect((await getLatestVersion({ fetchFn: fail, now: () => 1000 })).reason).toBe("cooldown");
     expect(calls).toBe(1);
     // Fresh cache survives — no new fetch while TTL holds.
-    const ok = async () => ({ ok: true, json: async () => [{ name: "v1.0.0" }] });
+    const ok = async () => ({ ok: true, json: async () => ({ version: "1.0.0" }) });
     await getLatestVersion({ fetchFn: ok, now: () => 20 * 60 * 1000 });
     expect(await getLatestVersion({ fetchFn: fail, now: () => 21 * 60 * 1000 })).toEqual({
       version: "1.0.0",
@@ -88,26 +101,11 @@ describe("versionCheck: getLatestVersion", () => {
     expect(calls).toBe(1);
   });
 
-  it("sends GitHub token when set", async () => {
-    let seen;
-    const fetchFn = async (_url, opts) => {
-      seen = opts.headers;
-      return { ok: true, json: async () => [{ name: "v1.0.0" }] };
-    };
-    process.env.GITHUB_TOKEN = "test-token";
-    try {
-      await getLatestVersion({ fetchFn, now: () => 0 });
-    } finally {
-      delete process.env.GITHUB_TOKEN;
-    }
-    expect(seen.Authorization).toBe("Bearer test-token");
-  });
-
   it("caches within TTL, refetches after", async () => {
     let calls = 0;
     const fetchFn = async () => {
       calls++;
-      return { ok: true, json: async () => [{ name: "v1.0.0" }] };
+      return { ok: true, json: async () => ({ version: "1.0.0" }) };
     };
     await getLatestVersion({ fetchFn, now: () => 0 });
     await getLatestVersion({ fetchFn, now: () => 1000 });

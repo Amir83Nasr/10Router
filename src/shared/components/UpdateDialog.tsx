@@ -203,7 +203,7 @@ export default function UpdateDialog({
   const status = !info ? (
     <p className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
       {checkFailed
-        ? "Could not reach GitHub to check for updates — the manual steps below still work."
+        ? "Could not reach npm registry to check for updates — the manual steps below still work."
         : "Checking for updates…"}
     </p>
   ) : info.hasUpdate ? (

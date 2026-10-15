@@ -2,6 +2,13 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.6] — 2026-10-15
+
+- Version badge: check npm registry latest instead of GitHub tags for sidebar update notice.
+- OpenCode: merge upstream PR 4860 — free-tier v2 fingerprint and `/inference/v1` endpoint table.
+- OpenCode: restore renamed (fingerprinted) tool names across streaming, SSE-to-JSON, non-streaming, and direct-translate response paths so clients see original names.
+- Changelog API: ship `CHANGELOG.md` into the standalone Docker bundle (`Dockerfile`, `next.config.mjs` tracing, npm `files`) and migrate `/api/changelog` route from JS to TS with read-failure logging.
+
 ## [0.1.5] — 2026-10-15
 
 - Fix: pin `next` to exact `16.3.5` in package dependencies to prevent runtime ENOENT on `preview-props.json` when npm resolves `next@16.4.0` against a prebuilt `.next` artifact.

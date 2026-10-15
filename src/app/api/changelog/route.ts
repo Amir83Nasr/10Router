@@ -12,7 +12,8 @@ export async function GET() {
   let markdown = "";
   try {
     markdown = await fs.promises.readFile(path.join(process.cwd(), "CHANGELOG.md"), "utf8");
-  } catch {
+  } catch (error) {
+    console.error("GET /api/changelog: failed to read CHANGELOG.md", error);
     return NextResponse.json(
       { error: "changelog unavailable" },
       { status: 500, headers: CORS_HEADERS },

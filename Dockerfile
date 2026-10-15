@@ -29,6 +29,7 @@ ENV DATA_DIR=/app/data
 ENV HOME=/home/node
 
 COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/CHANGELOG.md ./CHANGELOG.md
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/custom-server.js ./custom-server.js

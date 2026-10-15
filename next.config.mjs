@@ -24,6 +24,11 @@ const nextConfig = {
     root: tracingRoot,
   },
   outputFileTracingRoot: tracingRoot,
+  // Ship CHANGELOG.md into the standalone bundle so /api/changelog can read
+  // it at runtime (dev works by accident — the repo checkout has the file).
+  outputFileTracingIncludes: {
+    "/api/changelog": ["./CHANGELOG.md"],
+  },
   outputFileTracingExcludes: {
     "*": ["./gitbook/**/*"],
   },

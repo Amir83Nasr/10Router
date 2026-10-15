@@ -12,6 +12,7 @@
   },
   "files": [
     "bin/",
+    "CHANGELOG.md",
     "custom-server.js",
     "src/",
     "open-sse/",

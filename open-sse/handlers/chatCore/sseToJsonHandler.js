@@ -1,4 +1,5 @@
 import { convertResponsesStreamToJson } from "../../transformer/streamToJsonConverter.js";
+import { restoreToolNames } from "../../utils/opencodeFingerprint.js";
 import { createErrorResult } from "../../utils/error.js";
 import { HTTP_STATUS } from "../../config/runtimeConfig.js";
 import { FORMATS } from "../../translator/formats.js";
@@ -219,6 +220,7 @@ export async function handleForcedSSEToJson({
   clientRawRequest,
   onRequestSuccess,
   customToolNames,
+  toolNameMap,
   trackDone,
   appendLog,
   reqTag,
@@ -299,7 +301,7 @@ export async function handleForcedSSEToJson({
       if (sourceFormat === FORMATS.OPENAI_RESPONSES) {
         return {
           success: true,
-          response: new Response(JSON.stringify(jsonResponse), {
+          response: new Response(JSON.stringify(restoreToolNames(jsonResponse, toolNameMap)), {
             headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
           }),
         };
@@ -388,7 +390,7 @@ export async function handleForcedSSEToJson({
 
       return {
         success: true,
-        response: new Response(JSON.stringify(finalResp), {
+        response: new Response(JSON.stringify(restoreToolNames(finalResp, toolNameMap)), {
           headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
         }),
       };
@@ -489,7 +491,7 @@ export async function handleForcedSSEToJson({
 
     return {
       success: true,
-      response: new Response(JSON.stringify(finalBody), {
+      response: new Response(JSON.stringify(restoreToolNames(finalBody, toolNameMap)), {
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
       }),
     };

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PROVIDERS } from "../../open-sse/config/providers.js";
 import { OpenCodeExecutor } from "../../open-sse/executors/opencode.js";
 import { proxyAwareFetch } from "../../open-sse/utils/proxyFetch.js";
+import { OPENCODE_FINGERPRINT_TOOLS } from "../../open-sse/utils/opencodeFingerprint.js";
 
 vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
   proxyAwareFetch: vi.fn(async () => ({ ok: true, status: 200, headers: { get: () => "" } })),
@@ -9,8 +10,9 @@ vi.mock("../../open-sse/utils/proxyFetch.js", () => ({
 
 // Break caught: Muse Spark free Responses models 400 vì upstream
 // chỉ nhận tool_choice "auto"; named/required/none phải demote sang "auto".
-// Live 2026-09-19: both 1.2-free and 1.3-free reject non-auto with 400, and any
-// Responses request without both 'bash'+'read' tools returns 403 FreeTierError.
+// Live 2026-09-19: both 1.2-free and 1.3-free reject non-auto with 400.
+// Free-tier gate: client tools pass through verbatim, then the fingerprint
+// read/shell definitions are appended or upstream answers 403 FreeTierError.
 const FREE_12 = "muse-spark-1.2-contributor-free";
 const FREE_13 = "muse-spark-1.3-contributor-free";
 const CREDS = { connectionId: "opencode-free-tool-choice-test" };
@@ -22,6 +24,10 @@ const TOOLS = [
     description: "w",
     parameters: { type: "object", properties: {} },
   },
+];
+const WIRE_TOOLS = [
+  ...TOOLS,
+  ...OPENCODE_FINGERPRINT_TOOLS.map((name) => expect.objectContaining({ type: "function", name })),
 ];
 
 function responsesBody(model, tool_choice) {
@@ -46,13 +52,12 @@ describe("opencode Free tool_choice auto-only", () => {
       const body = responsesBody(model, structuredClone(choice));
       const out = new OpenCodeExecutor().transformRequest(model, body, true, CREDS);
       expect(out.tool_choice).toBe("auto");
-      // Cloak: original tool preserved + bash/read decoys (prevents 403 FreeTierError)
-      expect(out.tools.map((t) => t.name)).toEqual(["get_weather", "bash", "read"]);
+      expect(out.tools).toEqual(WIRE_TOOLS);
       expect(out.input).toEqual(INPUT);
     }
   });
 
-  it("giữ auto và default absent sang auto; tools/input nguyên vẹn + decoys", () => {
+  it("giữ auto và absent; tools/input nguyên vẹn", () => {
     const autoOut = new OpenCodeExecutor().transformRequest(
       FREE_13,
       responsesBody(FREE_13, "auto"),
@@ -60,7 +65,7 @@ describe("opencode Free tool_choice auto-only", () => {
       CREDS,
     );
     expect(autoOut.tool_choice).toBe("auto");
-    expect(autoOut.tools.map((t) => t.name)).toEqual(["get_weather", "bash", "read"]);
+    expect(autoOut.tools).toEqual(WIRE_TOOLS);
     expect(autoOut.input).toEqual(INPUT);
 
     const absentOut = new OpenCodeExecutor().transformRequest(
@@ -69,9 +74,9 @@ describe("opencode Free tool_choice auto-only", () => {
       true,
       CREDS,
     );
-    // Cloak defaults missing choice to auto so upstream never sees absent + tools
+    // Fingerprint pass fills an absent choice with "auto" (the API default once tools exist).
     expect(absentOut.tool_choice).toBe("auto");
-    expect(absentOut.tools.map((t) => t.name)).toEqual(["get_weather", "bash", "read"]);
+    expect(absentOut.tools).toEqual(WIRE_TOOLS);
     expect(absentOut.input).toEqual(INPUT);
   });
 
@@ -86,7 +91,7 @@ describe("opencode Free tool_choice auto-only", () => {
     expect(out.tool_choice).toEqual(choice);
   });
 
-  it("wire: execute gửi choice auto + decoys tới /zen/v1/responses", async () => {
+  it("wire: execute gửi choice auto tới /inference/v1/responses", async () => {
     proxyAwareFetch.mockClear();
     const ex = new OpenCodeExecutor();
     const body = responsesBody(FREE_13, { type: "function", name: "get_weather" });
@@ -96,19 +101,19 @@ describe("opencode Free tool_choice auto-only", () => {
       stream: true,
       credentials: CREDS,
     });
-    expect(url).toBe("https://opencode.ai/zen/v1/responses");
+    expect(url).toBe("https://opencode.ai/inference/v1/responses");
     expect(transformedBody.tool_choice).toBe("auto");
     expect(proxyAwareFetch).toHaveBeenCalledTimes(1);
     const [actualUrl, actualInit] = proxyAwareFetch.mock.calls[0];
-    expect(actualUrl).toBe("https://opencode.ai/zen/v1/responses");
+    expect(actualUrl).toBe("https://opencode.ai/inference/v1/responses");
     const sent = JSON.parse(actualInit.body);
     expect(sent.tool_choice).toBe("auto");
     expect(sent.model).toBe(FREE_13);
-    expect(sent.tools.map((t) => t.name)).toEqual(["get_weather", "bash", "read"]);
+    expect(sent.tools).toEqual(WIRE_TOOLS);
     expect(sent.input).toEqual(INPUT);
   });
 
-  it("cloak 46 external tools: tambah bash/read agar lolos FreeTierError", () => {
+  it("fingerprint 46 external tools: tambah read/shell agar lolos FreeTierError", () => {
     const tools46 = Array.from({ length: 46 }, (_, i) => ({
       type: "function",
       name: `ext_tool_${i}`,
@@ -119,8 +124,8 @@ describe("opencode Free tool_choice auto-only", () => {
     const out = new OpenCodeExecutor().transformRequest(FREE_13, body, true, CREDS);
     expect(out.tools).toHaveLength(48);
     const names = new Set(out.tools.map((t) => t.name));
-    expect(names.has("bash")).toBe(true);
     expect(names.has("read")).toBe(true);
+    expect(names.has("shell")).toBe(true);
     expect(names.has("ext_tool_0")).toBe(true);
     expect(out.tool_choice).toBe("auto");
   });

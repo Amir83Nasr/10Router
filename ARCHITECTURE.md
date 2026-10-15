@@ -137,7 +137,7 @@ Single SQLite DB:
 
 - entry `@/lib/db/index.js`, repos `src/lib/db/repos/*`, migrations `src/lib/db/migrations/`
 - file: `${DATA_DIR}/db/data.sqlite` (or `~/.10router/db/data.sqlite` when `DATA_DIR` is unset; see `src/lib/db/paths.js`)
-- driver chain (`src/lib/db/driver.js`): `bun:sqlite` → `better-sqlite3` (optionalDep, skipped on Node ≥ 24) → `node:sqlite` (≥22.5) → `sql.js`
+- driver chain (`src/lib/db/driver.js`): `bun:sqlite` → `better-sqlite3` (manual opt-in only, not shipped, skipped on Node ≥ 24) → `node:sqlite` (≥22.5) → `sql.js`
 - entities: providerConnections, providerNodes, modelAliases, combos, apiKeys, settings, pricing, disabledModels, proxyPools, usage, requestDetails
 - `src/lib/localDb.js` / `src/lib/usageDb.js` = backward-compat re-export shims (new code imports `@/lib/db/index.js`)
 - `db.json` / `usage.json` = legacy import sources only

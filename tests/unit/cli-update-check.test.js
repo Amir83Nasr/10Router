@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { cmpVer, checkUpdate } from "../../bin/update-check.mjs";
+import { cmpVer, checkUpdate, UPDATE_TTL } from "../../bin/update-check.mjs";
 
 function sandbox(pkg) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "10router-upd-"));
@@ -125,6 +125,40 @@ describe("checkUpdate", () => {
       fetchFn: down,
     });
     expect(stale).toContain("0.5.0");
+  });
+
+  it("revalidates after TTL so newly published versions are detected", async () => {
+    const { dir, dataDir } = sandbox({ name: "p", version: "0.1.0" });
+    const t0 = 1_700_000_000_000;
+    const v1 = async () => ({ ok: true, json: async () => ({ version: "0.2.0" }) });
+    const first = await checkUpdate({
+      root: dir,
+      dataDir,
+      isRepo: false,
+      argv: [],
+      env: {},
+      fetchFn: v1,
+      now: t0,
+    });
+    expect(first).toContain("0.1.0 → 0.2.0");
+    // Past the TTL the cache must not suppress the check: a newer publish
+    // on the registry has to surface on the next CLI invocation.
+    let fetched = 0;
+    const v2 = async () => {
+      fetched++;
+      return { ok: true, json: async () => ({ version: "0.3.0" }) };
+    };
+    const second = await checkUpdate({
+      root: dir,
+      dataDir,
+      isRepo: false,
+      argv: [],
+      env: {},
+      fetchFn: v2,
+      now: t0 + UPDATE_TTL + 1000,
+    });
+    expect(fetched).toBe(1);
+    expect(second).toContain("0.1.0 → 0.3.0");
   });
 
   it("previewLatest bypasses repo gate without network", async () => {

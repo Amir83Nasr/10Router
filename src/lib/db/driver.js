@@ -17,6 +17,9 @@ async function tryBunSqlite() {
 }
 
 async function tryBetterSqlite() {
+  // Optional manual install only — NOT shipped (avoids native build +
+  // npm install-script warnings on `npm i -g`). If present it is used as a
+  // fast path on Node < 24; otherwise node:sqlite / sql.js cover all runtimes.
   // Skip on Bun — better-sqlite3 native bindings unsupported
   if (process.versions.bun) return null;
   // Skip on Node >= 24: the native addon SIGSEGVs on load there, which is a
@@ -60,7 +63,7 @@ async function initAdapter() {
   ensureDirs();
   // Order per runtime:
   //   Bun:  bun:sqlite → sql.js
-  //   Node: better-sqlite3 → node:sqlite (≥22.5) → sql.js
+  //   Node: better-sqlite3 (manual opt-in only) → node:sqlite (≥22.5) → sql.js
   let adapter = await tryBunSqlite();
   if (!adapter) adapter = await tryBetterSqlite();
   if (!adapter) adapter = await tryNodeSqlite();

@@ -32,6 +32,7 @@ const ProviderTopology = dynamic(
   { ssr: false },
 );
 import UsageChart from "@/app/(dashboard)/dashboard/usage/components/UsageChart";
+import ProviderHealth from "@/app/(dashboard)/dashboard/usage/components/ProviderHealth";
 
 function timeAgo(timestamp: any) {
   const diff = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
@@ -663,6 +664,9 @@ export default function UsageStats({
 
       {/* Token / Cost chart - sync period */}
       {loading ? <PanelSkeleton /> : <UsageChart period={period} />}
+
+      {/* Fallback inspector: per-account health + why fallback triggered */}
+      {loading ? <PanelSkeleton /> : <ProviderHealth />}
 
       {/* Usage breakdown table, full width */}
       <div className="flex min-w-0 flex-col gap-3">

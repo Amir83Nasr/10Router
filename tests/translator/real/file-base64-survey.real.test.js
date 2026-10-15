@@ -121,17 +121,28 @@ function chatModels(providerId) {
 
 function targetProviders() {
   try {
-    const Database = require("better-sqlite3");
     const os = require("os");
     const path = require("path");
+    const fs = require("fs");
     const dbPath = process.env.DATA_DIR
       ? path.join(process.env.DATA_DIR, "db", "data.sqlite")
       : path.join(os.homedir(), ".10router", "db", "data.sqlite");
-    const db = new Database(dbPath, { readonly: true });
-    const rows = db
-      .prepare("SELECT DISTINCT provider FROM providerConnections WHERE isActive = 1")
-      .all();
-    db.close();
+    if (!fs.existsSync(dbPath)) return [];
+    const SQL = "SELECT DISTINCT provider FROM providerConnections WHERE isActive = 1";
+    let rows;
+    try {
+      // Built-in (Node ≥22.5) — no native install needed.
+      const { DatabaseSync } = require("node:sqlite");
+      const db = new DatabaseSync(dbPath, { readOnly: true });
+      rows = db.prepare(SQL).all();
+      db.close();
+    } catch {
+      // Manual opt-in fallback (better-sqlite3 no longer shipped).
+      const Database = require("better-sqlite3");
+      const db = new Database(dbPath, { readonly: true });
+      rows = db.prepare(SQL).all();
+      db.close();
+    }
     let list = rows.map((r) => r.provider).sort();
     if (PROVIDER_FILTER.length) list = list.filter((p) => PROVIDER_FILTER.includes(p));
     return list;

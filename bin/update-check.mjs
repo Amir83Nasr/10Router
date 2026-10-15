@@ -6,7 +6,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export const UPDATE_TTL = 24 * 3600 * 1000;
+// Short TTL on purpose: the check runs on every CLI invocation, so a new
+// publish must be detected promptly. A 24h cache froze `latest` across
+// same-day releases and the notice never fired. At most one registry GET
+// per hour of CLI use; offline stays fail-open via stale-cache fallback.
+export const UPDATE_TTL = 3600 * 1000;
 
 export function cmpVer(a, b) {
   const pa = String(a).replace(/^v/, "").split("-")[0].split(".").map(Number);

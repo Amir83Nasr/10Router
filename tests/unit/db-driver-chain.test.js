@@ -1,4 +1,4 @@
-// Verify 3-tier driver fallback: better-sqlite3 → node:sqlite → sql.js
+// Verify driver fallback: better-sqlite3 (manual opt-in) → node:sqlite → sql.js
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 describe("Driver fallback chain", () => {
-  it("default → picks better-sqlite3 when available", async () => {
+  it("default → picks best available driver", async () => {
     const { getAdapter } = await import("@/lib/db/driver.js");
     const db = await getAdapter();
     expect(["better-sqlite3", "node:sqlite", "sql.js"]).toContain(db.driver);

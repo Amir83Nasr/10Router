@@ -2,6 +2,12 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.8] — 2026-10-15
+
+- Deps: drop `better-sqlite3` — fixes `npm i -g` install-script warning (`allowScripts`) and the deprecated `prebuild-install` warning. DB chain is now built-in `node:sqlite` (≥22.5) → `sql.js` (WASM fallback); the adapter loads `better-sqlite3` lazily as a manual opt-in only, so the Next.js build no longer resolves it.
+- CLI: shorten update-check TTL from 24h to 1h so same-day releases trigger the update notice.
+- Dashboard: ProviderHealth fallback inspector (per-account health + why fallback triggered) with `/api/usage/health` route.
+
 ## [0.1.7] — 2026-10-15
 
 - OpenCode Free/Zen: migrate chat/responses/messages endpoints to Console Inference v2 (`/inference/openai/v1/*`, `/inference/anthropic/v1/messages`); SystemOne to `/inference/v1/systemone` with v2 client UA.

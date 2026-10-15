@@ -1,10 +1,21 @@
-import Database from "better-sqlite3";
+import { createRequire } from "node:module";
 import { PRAGMA_SQL } from "../schema.js";
 
 // Periodic checkpoint to keep WAL file small (avoid huge -wal/-shm growth)
 const CHECKPOINT_INTERVAL_MS = 60 * 1000;
 
+function loadBetterSqlite3() {
+  // Lazy require (NOT a static import) so Next.js webpack/Turbopack never
+  // tries to resolve or bundle it at build time: the package is an optional
+  // manual install, absent from dependencies. Specifier is computed to defeat
+  // static analysis; missing package → throws → driver.js falls through to
+  // node:sqlite / sql.js.
+  const pkg = ["better", "sqlite3"].join("-");
+  return createRequire(import.meta.url)(pkg);
+}
+
 export function createBetterSqliteAdapter(filePath) {
+  const Database = loadBetterSqlite3();
   const db = new Database(filePath);
   db.exec(PRAGMA_SQL);
   // Schema is created/synced by migrate.js after adapter init

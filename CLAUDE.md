@@ -37,7 +37,7 @@ Request flow: `src/app/api/v1/*` (Next rewrites in `next.config.mjs`: `/v1/*` �
 
 - Translator pivots through OpenAI; exact `source:target` pair (`register(from, to, …)` import side effect in `translator/index.js`) = direct route, skips lossy double-hop. Prefer direct for fragile pairs (thinking blocks, tool ids, non-base64 images, `is_error`). Never hardcode role/block/model strings — `translator/schema/` + `config/` constants.
 - Provider registry: one file per provider in `providers/registry/`; `registry/index.js` auto-generated (regenerate via `scripts/migrate-registry.mjs`, never hand-edit). New provider: copy `REGISTRY_TEMPLATE.js`, add models to `config/providerModels.js`; executor only for non-OpenAI-compatible upstreams.
-- Persistence: SQLite `DATA_DIR/db/data.sqlite` (`src/lib/db/paths.js`), fallback chain `driver.js`: `bun:sqlite` → `better-sqlite3` (optionalDep) → `node:sqlite` (≥22.5) → `sql.js`. New code imports `@/lib/db/index.js` (`localDb.js`/`usageDb.js` = compat shims); repos `src/lib/db/repos/*`, migrations `src/lib/db/migrations/`. `db.json`/`usage.json` = legacy import sources only.
+- Persistence: SQLite `DATA_DIR/db/data.sqlite` (`src/lib/db/paths.js`), fallback chain `driver.js`: `bun:sqlite` → `better-sqlite3` (manual opt-in, not shipped) → `node:sqlite` (≥22.5) → `sql.js`. New code imports `@/lib/db/index.js` (`localDb.js`/`usageDb.js` = compat shims); repos `src/lib/db/repos/*`, migrations `src/lib/db/migrations/`. `db.json`/`usage.json` = legacy import sources only.
 - RTK (`open-sse/rtk/`): in-place `tool_result` compression, **fail-open** (never throw, skips `is_error`/`status:"error"`).
 - Binary/protobuf upstreams (kiro EventStream, cursor protobuf, commandcode NDJSON) handled in own executor, not translator.
 

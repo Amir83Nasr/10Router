@@ -2,6 +2,12 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.7] — 2026-10-15
+
+- OpenCode Free/Zen: migrate chat/responses/messages endpoints to Console Inference v2 (`/inference/openai/v1/*`, `/inference/anthropic/v1/messages`); SystemOne to `/inference/v1/systemone` with v2 client UA.
+- OpenCode Go: migrate from `/zen/go/v1/*` to `/inference/go/v1/*` (chat, messages, responses, usage).
+- Dashboard: provider test/validate probes use v2 Go endpoint and v2 free-tier UA.
+
 ## [0.1.6] — 2026-10-15
 
 - Version badge: check npm registry latest instead of GitHub tags for sidebar update notice.

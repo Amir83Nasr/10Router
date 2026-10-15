@@ -43,10 +43,10 @@ export default {
   ],
   serviceKinds: ["llm", "systemone"],
   systemoneConfig: {
-    baseUrl: "https://opencode.ai/zen/v1/systemone",
+    baseUrl: "https://opencode.ai/inference/v1/systemone",
     headers: {
       "x-opencode-client": "cli",
-      "User-Agent": "opencode/1.18.35",
+      "User-Agent": "opencode/latest/2.0.26/cli",
     },
   },
   // Live catalog per https://opencode.ai/v2/docs/console/inference (unauth GET).

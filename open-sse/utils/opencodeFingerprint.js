@@ -1,7 +1,7 @@
 /**
  * Helpers for the OpenCode free-tier client fingerprint.
  *
- * Live upstream probes (OpenCode v2, /inference/v1) show that free-tier
+ * Live upstream probes (OpenCode v2, /inference/openai|anthropic/v1) show that free-tier
  * requests must declare OpenCode's own `read` and `shell` tools with their exact
  * descriptions and parameter schemas; stubbed descriptions, renamed schemas or
  * tool_choice "none" are answered with 403 FreeTierError. Caller tools are sent

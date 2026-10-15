@@ -531,8 +531,8 @@ exports[`GOLDEN buildUrl (default executor providers) > openai → url (stream +
 
 exports[`GOLDEN buildUrl (default executor providers) > opencode-zen → url (stream + non-stream) 1`] = `
 {
-  "nonStream": "https://opencode.ai/zen/v1/chat/completions",
-  "stream": "https://opencode.ai/zen/v1/chat/completions",
+  "nonStream": "https://opencode.ai/inference/openai/v1/chat/completions",
+  "stream": "https://opencode.ai/inference/openai/v1/chat/completions",
 }
 `;
 

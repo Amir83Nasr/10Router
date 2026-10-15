@@ -17,29 +17,29 @@ export default {
   },
   category: "apikey",
   transport: {
-    baseUrl: "https://opencode.ai/zen/v1/chat/completions",
+    baseUrl: "https://opencode.ai/inference/openai/v1/chat/completions",
     headers: {},
     usage: {
       url: "https://opencode.ai/zen/v1/usage",
     },
   },
   // Multi-endpoint: pick the transport matching the client sourceFormat to skip
-  // translation. Mirrors opencode-go, pointed at /zen/v1 (endpoint families per
+  // translation. Mirrors opencode-go, pointed at /inference (endpoint families per
   // https://opencode.ai/v2/docs/console/inference, Go table at /v2/docs/console/go).
   transports: [
     {
       format: "openai",
-      baseUrl: "https://opencode.ai/zen/v1/chat/completions",
+      baseUrl: "https://opencode.ai/inference/openai/v1/chat/completions",
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
     },
     {
       format: "claude",
-      baseUrl: "https://opencode.ai/zen/v1/messages",
+      baseUrl: "https://opencode.ai/inference/anthropic/v1/messages",
       auth: { combined: true, header: "x-api-key", scheme: "raw", anthropicVersion: true },
     },
     {
       format: "openai-responses",
-      baseUrl: "https://opencode.ai/zen/v1/responses",
+      baseUrl: "https://opencode.ai/inference/openai/v1/responses",
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
     },
   ],
@@ -283,10 +283,10 @@ export default {
   ],
   serviceKinds: ["llm", "systemone"],
   systemoneConfig: {
-    baseUrl: "https://opencode.ai/zen/v1/systemone",
+    baseUrl: "https://opencode.ai/inference/v1/systemone",
     headers: {
       "x-opencode-client": "cli",
-      "User-Agent": "opencode/1.18.35",
+      "User-Agent": "opencode/latest/2.0.26/cli",
     },
   },
   // Live catalog per https://opencode.ai/v2/docs/console/inference (unauth GET).

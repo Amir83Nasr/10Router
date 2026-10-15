@@ -91,7 +91,7 @@ describe("opencode Free tool_choice auto-only", () => {
     expect(out.tool_choice).toEqual(choice);
   });
 
-  it("wire: execute gửi choice auto tới /inference/v1/responses", async () => {
+  it("wire: execute gửi choice auto tới /inference/openai/v1/responses", async () => {
     proxyAwareFetch.mockClear();
     const ex = new OpenCodeExecutor();
     const body = responsesBody(FREE_13, { type: "function", name: "get_weather" });
@@ -101,11 +101,11 @@ describe("opencode Free tool_choice auto-only", () => {
       stream: true,
       credentials: CREDS,
     });
-    expect(url).toBe("https://opencode.ai/inference/v1/responses");
+    expect(url).toBe("https://opencode.ai/inference/openai/v1/responses");
     expect(transformedBody.tool_choice).toBe("auto");
     expect(proxyAwareFetch).toHaveBeenCalledTimes(1);
     const [actualUrl, actualInit] = proxyAwareFetch.mock.calls[0];
-    expect(actualUrl).toBe("https://opencode.ai/inference/v1/responses");
+    expect(actualUrl).toBe("https://opencode.ai/inference/openai/v1/responses");
     const sent = JSON.parse(actualInit.body);
     expect(sent.tool_choice).toBe("auto");
     expect(sent.model).toBe(FREE_13);

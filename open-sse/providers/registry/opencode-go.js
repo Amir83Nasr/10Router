@@ -17,10 +17,10 @@ export default {
   },
   category: "apikey",
   transport: {
-    baseUrl: "https://opencode.ai/zen/go/v1/chat/completions",
+    baseUrl: "https://opencode.ai/inference/go/v1/chat/completions",
     headers: {},
     usage: {
-      url: "https://opencode.ai/zen/go/v1/usage",
+      url: "https://opencode.ai/inference/go/v1/usage",
     },
   },
   // Multi-endpoint: pick the transport matching the client sourceFormat to skip
@@ -29,17 +29,17 @@ export default {
   transports: [
     {
       format: "openai",
-      baseUrl: "https://opencode.ai/zen/go/v1/chat/completions",
+      baseUrl: "https://opencode.ai/inference/go/v1/chat/completions",
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
     },
     {
       format: "claude",
-      baseUrl: "https://opencode.ai/zen/go/v1/messages",
+      baseUrl: "https://opencode.ai/inference/go/v1/messages",
       auth: { combined: true, header: "x-api-key", scheme: "raw", anthropicVersion: true },
     },
     {
       format: "openai-responses",
-      baseUrl: "https://opencode.ai/zen/go/v1/responses",
+      baseUrl: "https://opencode.ai/inference/go/v1/responses",
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
     },
   ],
@@ -86,7 +86,7 @@ export default {
       name: "LongCat 2.5 Preview Free",
       supportedFormats: ["openai"],
     },
-    // Served by /zen/go/v1/responses only — the responses-only entry forces chatCore
+    // Served by /inference/go/v1/responses only — the responses-only entry forces chatCore
     // past the sourceFormat-matched transports into translation (see chatCore guard).
     {
       id: "grok-4.7",

@@ -4,7 +4,7 @@ import { getModelSupportedFormats } from "../../open-sse/config/providerModels.j
 import { OpenCodeZenExecutor } from "../../open-sse/executors/opencode-zen.js";
 
 // Regression: the Zen executor used to route only Muse Spark models to
-// /zen/v1/responses (via isMuseSparkModel), while the registry marks every
+// /inference/openai/v1/responses (via isMuseSparkModel), while the registry marks every
 // responses-family model (GPT, Grok, Muse Spark) as responses-only. GPT/Grok
 // requests then hit /chat/completions and failed upstream. isResponsesModel
 // now reads the registry, so executor and chatCore guard agree.
@@ -21,24 +21,26 @@ describe("OpenCodeZenExecutor responses routing", () => {
     ];
     for (const m of responsesOnly) {
       expect(getModelSupportedFormats("ocz", m)).toEqual(["openai-responses"]);
-      expect(ex.buildUrl(m)).toBe("https://opencode.ai/zen/v1/responses");
-      expect(ex.buildUrl(`${m}(high)`)).toBe("https://opencode.ai/zen/v1/responses");
+      expect(ex.buildUrl(m)).toBe("https://opencode.ai/inference/openai/v1/responses");
+      expect(ex.buildUrl(`${m}(high)`)).toBe("https://opencode.ai/inference/openai/v1/responses");
       // Even a stale runtimeTransport must not drag responses models elsewhere.
       expect(
         ex.buildUrl(m, true, 0, {
-          runtimeTransport: { baseUrl: "https://opencode.ai/zen/v1/chat/completions" },
+          runtimeTransport: { baseUrl: "https://opencode.ai/inference/openai/v1/chat/completions" },
         }),
-      ).toBe("https://opencode.ai/zen/v1/responses");
+      ).toBe("https://opencode.ai/inference/openai/v1/responses");
     }
   });
 
   it("leaves chat/messages models on the default/runtime transport", () => {
     const ex = new OpenCodeZenExecutor();
-    expect(ex.buildUrl("kimi-k2.6")).toBe("https://opencode.ai/zen/v1/chat/completions");
+    expect(ex.buildUrl("kimi-k2.6")).toBe(
+      "https://opencode.ai/inference/openai/v1/chat/completions",
+    );
     expect(
       ex.buildUrl("claude-sonnet-4-6", true, 0, {
-        runtimeTransport: { baseUrl: "https://opencode.ai/zen/v1/messages" },
+        runtimeTransport: { baseUrl: "https://opencode.ai/inference/anthropic/v1/messages" },
       }),
-    ).toBe("https://opencode.ai/zen/v1/messages");
+    ).toBe("https://opencode.ai/inference/anthropic/v1/messages");
   });
 });

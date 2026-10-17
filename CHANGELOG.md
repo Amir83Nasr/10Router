@@ -2,6 +2,25 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.9] — 2026-10-17
+
+- Zed: detect context-window overflow reported as an in-stream `status:failed` frame and return it as a request-scoped `400 context_length_exceeded` instead of assistant text — the account is no longer cooled down by the fallback layer. History is trimmed to the model's catalog limit before sending, and a pre-send guard fails fast when even the trimmed body does not fit.
+- Zed: retry transient network failures (`ECONNRESET`/`ETIMEDOUT`) on auth and completion fetches using the shared 502 retry config; caller aborts are never retried.
+- Combos: validate members on create/update (`POST`/`PUT /api/combos`) — bare words from a bad paste, duplicates, self-references, and unknown names are rejected at save time with a message naming the offending entries, instead of failing every run at request time.
+- Zed: model-list and usage resolvers now honour the connection's proxy pool instead of falling back to a direct call.
+- Claude → OpenAI: stop emitting literal `<think>`/`</think>` markers into `delta.content` — thinking text streams as `reasoning_content` only.
+- Fix: opencode model-list URL for Anthropic-compatible providers built `.../v1/messag` (`slice(0, -9)` ate a character); now sliced by `"/messages".length`.
+- Fix: xAI OAuth poll interval was never cleared on the 5-minute auth timeout, leaking a 100 ms timer.
+- Fix: `useShutdown` called `setState` inside an effect (cascading render); the transition now happens where the poll completes.
+- Perf: `/api/usage/stream` ran the full usage-stats recompute once per open tab per event; all subscribers now share one cache and one in-flight recompute, so N tabs cost the same as one.
+- Perf: `matchPattern` recompiled a `RegExp` on every call inside ~100-entry pricing/capability loops; patterns are now memoized.
+- Perf: settings were read from the DB and re-merged against ~40 defaults three times per chat request; added a short-TTL cache with write invalidation.
+- Perf: remote-image prefetch for base64-only targets now fetches in parallel instead of serially in the pre-first-byte path.
+- Perf: custom provider-node prefix resolution did three identical type-filtered table scans per request; now one scan.
+- Fix: token-keyed Claude/Antigravity usage caches never evicted retired tokens; added unref'd sweepers.
+- Fix: silently swallowed failures now log — background projectId persistence and provider-node name lookup.
+- Types: resolved 11 pre-existing `tsc --noEmit` errors under `src/` (stale generated `.next/types` route-tag warnings remain, covered by `ignoreBuildErrors`).
+
 ## [0.1.8] — 2026-10-15
 
 - Deps: drop `better-sqlite3` — fixes `npm i -g` install-script warning (`allowScripts`) and the deprecated `prebuild-install` warning. DB chain is now built-in `node:sqlite` (≥22.5) → `sql.js` (WASM fallback); the adapter loads `better-sqlite3` lazily as a manual opt-in only, so the Next.js build no longer resolves it.

@@ -16,6 +16,16 @@ const WEEKLY_CONFIG = {
 const WEEKLY_CACHE_TTL_MS = 180_000; // 3 minutes
 const weeklyCache = new Map(); // cacheKey -> { result, expiresAt } | { promise }
 
+// Keys embed the access token, which rotates. Expiry is only read-checked, so
+// retired tokens would accumulate — sweep on a slow unref'd timer.
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, hit] of weeklyCache) {
+    if (hit?.promise) continue; // in-flight
+    if (!hit || hit.expiresAt <= now) weeklyCache.delete(key);
+  }
+}, WEEKLY_CACHE_TTL_MS).unref?.();
+
 function cacheKey(accessToken, projectId) {
   return `${accessToken}::${projectId || ""}`;
 }

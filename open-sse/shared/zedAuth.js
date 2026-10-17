@@ -11,6 +11,7 @@
 
 import crypto from "node:crypto";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
+import { DEFAULT_RETRY_CONFIG, resolveRetryEntry } from "../config/runtimeConfig.js";
 
 export const ZED_WEB_BASE_URL = "https://zed.dev";
 export const ZED_CLOUD_BASE_URL = "https://cloud.zed.dev";
@@ -179,8 +180,48 @@ function getSystemId(credentials) {
   return String(credentials?.providerSpecificData?.systemId || credentials?.systemId || "");
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Transient socket failures (ECONNRESET/ETIMEDOUT/socket hang up via relay or
+// direct) surface as thrown TypeErrors from fetch. Retry those with the same
+// 502-config the BaseExecutor pipeline uses. Anything else — including caller
+// aborts and permanent failures (ENOTFOUND, bad TLS, 5xx bodies that resolve
+// normally) — is rethrown immediately: retrying it only adds delay to an
+// outcome that cannot change.
+const TRANSIENT_NET_CODES = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EPIPE",
+  "EAI_AGAIN",
+  "UND_ERR_SOCKET",
+]);
+
+function isTransientNetError(error) {
+  if (!error || error.name === "AbortError") return false;
+  const code = error.code || error.cause?.code;
+  if (code && TRANSIENT_NET_CODES.has(code)) return true;
+  // Node's undici raises a bare TypeError("fetch failed") / "socket hang up"
+  // for relay-side resets, so the message is the only signal available.
+  return /socket hang up|ECONNRESET|other side closed/i.test(String(error.message || ""));
+}
+
+async function zedFetchWithRetry(url, options, proxyOptions = null, statusKey = 502) {
+  const { attempts, delayMs } = resolveRetryEntry(DEFAULT_RETRY_CONFIG[statusKey]);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await proxyAwareFetch(url, options, proxyOptions);
+    } catch (error) {
+      if (!isTransientNetError(error) || attempt >= attempts) throw error;
+      await sleep(delayMs);
+    }
+  }
+}
+
 async function fetchJson(url, options, proxyOptions = null) {
-  const res = await proxyAwareFetch(url, options, proxyOptions);
+  const res = await zedFetchWithRetry(url, options, proxyOptions);
   const text = await res.text();
   let data = null;
   if (text) {
@@ -309,7 +350,7 @@ export async function zedLlmFetch(credentials, path, options = {}) {
   const url = zedUrl(config, "llmBaseUrl", path, ZED_LLM_BASE_URL);
   const buildRequest = async (forceRefresh) => {
     const token = await fetchZedLlmToken(credentials, { ...options, forceRefresh });
-    return proxyAwareFetch(
+    return zedFetchWithRetry(
       url,
       {
         ...options.fetchOptions,

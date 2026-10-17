@@ -556,7 +556,7 @@ export default function ProviderDetailPage() {
     modelId,
     type = "llm",
     providerAliasOverride = providerStorageAlias,
-    caps,
+    caps?: unknown,
   ) => {
     try {
       const res = await fetch("/api/models/custom", {

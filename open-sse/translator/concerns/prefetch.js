@@ -89,11 +89,19 @@ export async function prefetchRemoteImages(body, sourceFormat, targetFormat, opt
   const refs = collectImageRefs(body, sourceFormat);
   if (!refs.length) return 0;
 
+  // Fetch in parallel: this runs in the pre-first-byte path, and serial
+  // round trips made N images cost N × latency. Per-ref failure is already
+  // fail-open, so allSettled preserves existing behaviour.
+  const fetchedList = await Promise.all(
+    refs.map(async (ref) => {
+      const url = ref.get();
+      if (parseDataUri(url)) return { ref, fetched: null };
+      return { ref, fetched: await fetchImageAsBase64(url, options) };
+    }),
+  );
+
   let converted = 0;
-  for (const ref of refs) {
-    const url = ref.get();
-    if (parseDataUri(url)) continue; // already inline
-    const fetched = await fetchImageAsBase64(url, options);
+  for (const { ref, fetched } of fetchedList) {
     if (!fetched) continue;
     if (ref.set) ref.set(fetched.url);
     else if (ref.part) {

@@ -1,11 +1,13 @@
 // Public API barrel — all DB functions
 import { getAdapter } from "./driver.js";
 import { stringifyJson, parseJson } from "./helpers/jsonCol.js";
+import { invalidateSettingsCache } from "./repos/settingsRepo.js";
 
 // Settings
 export {
   getSettings,
   updateSettings,
+  invalidateSettingsCache,
   isCloudEnabled,
   getCloudUrl,
   exportSettings,
@@ -303,6 +305,7 @@ export async function importDb(payload) {
     }
   });
 
+  invalidateSettingsCache(); // writes here bypass updateSettings
   return await exportDb();
 }
 

@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
-import { getComboById, updateCombo, deleteCombo, getComboByName } from "@/lib/localDb";
+import {
+  getComboById,
+  updateCombo,
+  deleteCombo,
+  getComboByName,
+  getCombos,
+  getModelAliases,
+} from "@/lib/localDb";
 import { resetComboRotation } from "open-sse/services/combo.js";
+import { findComboMemberProblems } from "@/lib/validateComboModels";
 
 // Validate combo name: only a-z, A-Z, 0-9, -, _
 const VALID_NAME_REGEX = /^[a-zA-Z0-9_.\-]+$/;
@@ -46,6 +54,35 @@ export async function PUT(request, { params }) {
 
     // Capture previous name to invalidate rotation state on rename
     const prev = await getComboById(id);
+    if (!prev) {
+      return NextResponse.json({ error: "Combo not found" }, { status: 404 });
+    }
+
+    // Same member validation as POST (see validateComboModels.ts).
+    if (body.models !== undefined) {
+      const [aliases, combos] = await Promise.all([getModelAliases(), getCombos()]);
+      const cleanedModels = Array.isArray(body.models)
+        ? [
+            ...new Set(
+              body.models.map((m) => (typeof m === "string" ? m.trim() : "")).filter(Boolean),
+            ),
+          ]
+        : [];
+      const problems = findComboMemberProblems(cleanedModels, {
+        aliases,
+        comboNames: combos.filter((c) => c.id !== id).map((c) => c.name),
+        selfName: body.name || prev.name,
+      });
+      if (!Array.isArray(body.models) || problems.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Invalid combo models: ${!Array.isArray(body.models) ? "models must be an array" : problems.join("; ")}`,
+          },
+          { status: 400 },
+        );
+      }
+      body = { ...body, models: cleanedModels };
+    }
     const combo = await updateCombo(id, body);
 
     if (!combo) {

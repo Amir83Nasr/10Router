@@ -31,7 +31,13 @@ const ProviderTopology = dynamic(
   () => import("@/app/(dashboard)/dashboard/usage/components/ProviderTopology"),
   { ssr: false },
 );
-import UsageChart from "@/app/(dashboard)/dashboard/usage/components/UsageChart";
+// Lazy-load: keeps recharts out of the usage page's initial bundle
+const UsageChart = dynamic(
+  () => import("@/app/(dashboard)/dashboard/usage/components/UsageChart"),
+  {
+    ssr: false,
+  },
+);
 import ProviderHealth from "@/app/(dashboard)/dashboard/usage/components/ProviderHealth";
 
 function timeAgo(timestamp: any) {

@@ -108,10 +108,22 @@ const LIVE_MODEL_RESOLVERS = {
     return result?.models?.length ? { models: result.models } : null;
   },
   zed: async (conn) => {
-    const result = await resolveZedModels({
-      accessToken: conn.accessToken,
-      providerSpecificData: conn.providerSpecificData || {},
-    });
+    const proxy = await resolveConnectionProxyConfig(conn.providerSpecificData || {});
+    const result = await resolveZedModels(
+      {
+        accessToken: conn.accessToken,
+        providerSpecificData: conn.providerSpecificData || {},
+      },
+      {
+        proxyOptions: {
+          connectionProxyEnabled: proxy.connectionProxyEnabled === true,
+          connectionProxyUrl: proxy.connectionProxyUrl || "",
+          connectionNoProxy: proxy.connectionNoProxy || "",
+          vercelRelayUrl: proxy.vercelRelayUrl || "",
+          strictProxy: proxy.strictProxy === true,
+        },
+      },
+    );
     if (!result?.models?.length) return null;
     return {
       models: result.models
@@ -182,10 +194,12 @@ async function fetchCompatibleModelIds(connection) {
   if (isOpenAICompatibleProvider(connection.provider)) {
     headers.Authorization = `Bearer ${connection.apiKey}`;
   } else if (isAnthropicCompatibleProvider(connection.provider)) {
+    // Anthropic's model list lives at the API root, not under /messages.
+    // `-"/messages".length` matters: a bare -9 eats the "m" of "models".
     if (url.endsWith("/messages/models")) {
-      url = url.slice(0, -9);
+      url = url.slice(0, -"/messages".length);
     } else if (url.endsWith("/messages")) {
-      url = `${url.slice(0, -9)}/models`;
+      url = `${url.slice(0, -"/messages".length)}/models`;
     }
     headers["x-api-key"] = connection.apiKey;
     headers["anthropic-version"] = "2023-06-01";

@@ -24,6 +24,21 @@ const oauthCooldown = new Map();
 const USAGE_CACHE_TTL_MS = 300000;
 const usageCache = new Map(); // token -> { promise } | { result, expiresAt }
 
+// Both maps are keyed by access token, which rotates. Expiry is only checked on
+// read, so entries for retired tokens would live forever — sweep them on a slow
+// timer (unref'd so it never holds the process open).
+function sweepExpired() {
+  const now = Date.now();
+  for (const [token, hit] of usageCache) {
+    if (hit?.promise) continue; // in-flight
+    if (!hit || hit.expiresAt <= now) usageCache.delete(token);
+  }
+  for (const [token, until] of oauthCooldown) {
+    if (until <= now) oauthCooldown.delete(token);
+  }
+}
+setInterval(sweepExpired, USAGE_CACHE_TTL_MS).unref?.();
+
 export async function getClaudeUsage(accessToken, proxyOptions = null, options = {}) {
   const force = options?.force === true;
 

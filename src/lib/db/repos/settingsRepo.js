@@ -62,10 +62,23 @@ const DEFAULT_SETTINGS = {
   pxpipeTimeoutMs: 15000,
 };
 
+// Settings are read ~3× per chat request (chat.js twice, auth.ts once) and
+// re-merge ~40 defaults each time. Same short-TTL pattern as
+// requestDetailsRepo's CONFIG_CACHE_TTL_MS; writes refresh it immediately.
+const SETTINGS_CACHE_TTL_MS = 2000;
+
+let cachedSettings = null;
+let cachedSettingsTs = 0;
+
 async function readRaw() {
+  if (cachedSettings && Date.now() - cachedSettingsTs < SETTINGS_CACHE_TTL_MS) {
+    return cachedSettings;
+  }
   const db = await getAdapter();
   const row = db.get(`SELECT data FROM settings WHERE id = 1`);
-  return row ? parseJson(row.data, {}) : {};
+  cachedSettings = row ? parseJson(row.data, {}) : {};
+  cachedSettingsTs = Date.now();
+  return cachedSettings;
 }
 
 // Merge raw settings with defaults; backward-compat for missing keys
@@ -92,6 +105,12 @@ export async function getSettings() {
   return mergeWithDefaults(raw);
 }
 
+// For writers that bypass updateSettings (bulk restore in db/index.js).
+export function invalidateSettingsCache() {
+  cachedSettings = null;
+  cachedSettingsTs = 0;
+}
+
 // Atomic read-merge-write inside transaction (prevents losing concurrent updates)
 export async function updateSettings(updates) {
   const db = await getAdapter();
@@ -105,6 +124,8 @@ export async function updateSettings(updates) {
       [stringifyJson(next)],
     );
   });
+  cachedSettings = next;
+  cachedSettingsTs = Date.now();
   return mergeWithDefaults(next);
 }
 

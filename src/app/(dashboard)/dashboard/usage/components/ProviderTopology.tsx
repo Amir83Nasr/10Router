@@ -423,12 +423,15 @@ export default function ProviderTopology({
   const lastKey = lastProvider?.toLowerCase() || "";
   const errorKey = errorProvider?.toLowerCase() || "";
 
-  const rawActiveSet = useMemo(() => new Set(activeKey ? activeKey.split(",") : []), [activeKey]);
+  const rawActiveSet = useMemo(
+    () => new Set<string>(activeKey ? activeKey.split(",") : []),
+    [activeKey],
+  );
   const lastSet = useMemo(() => new Set(lastKey ? [lastKey] : []), [lastKey]);
   const errorSet = useMemo(() => new Set(errorKey ? [errorKey] : []), [errorKey]);
 
   // Track firstSeen per active provider; drop provider if running too long (BE stuck)
-  const firstSeenRef = useRef({});
+  const firstSeenRef = useRef<Record<string, number>>({});
   const [tick, setTick] = useState<number>(0);
 
   useEffect(() => {

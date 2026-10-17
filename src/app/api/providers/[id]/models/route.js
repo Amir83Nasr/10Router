@@ -285,12 +285,23 @@ const PROVIDER_MODELS_CONFIG = {
   zed: {
     customResolver: async (connection) => {
       try {
+        const proxy = await resolveConnectionProxyConfig(connection.providerSpecificData || {});
         const result = await resolveZedModels(
           {
             accessToken: connection.accessToken,
             providerSpecificData: connection.providerSpecificData || {},
           },
-          { config: ZED_HOSTED_CONFIG, forceRefresh: true },
+          {
+            config: ZED_HOSTED_CONFIG,
+            forceRefresh: true,
+            proxyOptions: {
+              connectionProxyEnabled: proxy.connectionProxyEnabled === true,
+              connectionProxyUrl: proxy.connectionProxyUrl || "",
+              connectionNoProxy: proxy.connectionNoProxy || "",
+              vercelRelayUrl: proxy.vercelRelayUrl || "",
+              strictProxy: proxy.strictProxy === true,
+            },
+          },
         );
         const models = (result?.models || [])
           .filter((m) => m && !m.isDisabled)

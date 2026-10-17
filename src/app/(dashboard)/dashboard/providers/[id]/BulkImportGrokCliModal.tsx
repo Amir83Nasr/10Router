@@ -76,7 +76,7 @@ export default function BulkImportGrokCliModal({ isOpen, onClose, onSuccess }: a
   const processFiles = async (files: any) => {
     if (!files || files.length === 0) return;
     setParseError("");
-    const jsonFiles: any[] = Array.from(files).filter(
+    const jsonFiles: File[] = Array.from(files as FileList).filter(
       (file) => file.name.endsWith(".json") || file.type === "application/json" || file.type === "",
     );
 

@@ -70,7 +70,10 @@ export async function GET() {
       for (const node of nodes) {
         if (node.id && node.name) nodeNameMap[node.id] = node.name;
       }
-    } catch {}
+    } catch (err) {
+      // Non-fatal: names degrade to raw provider ids, but stay visible.
+      console.warn("Failed to load provider nodes for name map:", err);
+    }
 
     // Hide sensitive fields, enrich name for compatible providers
     const safeConnections = connections.map((c) => {

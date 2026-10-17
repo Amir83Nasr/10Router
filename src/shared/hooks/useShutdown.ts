@@ -32,6 +32,8 @@ export function useShutdown() {
         timers.current.push(t as unknown as number);
       });
     }
+    // Poll finished: leaving the spinner is part of the same transition.
+    setShuttingDown(false);
     if (Date.now() >= deadline - HEALTH_POLL_MS) setTimedOut(true);
     else setStopped(true);
   }, []);
@@ -59,10 +61,6 @@ export function useShutdown() {
     setStopped(false);
     setTimedOut(false);
   }, []);
-
-  useEffect(() => {
-    if (stopped || timedOut) setShuttingDown(false);
-  }, [stopped, timedOut]);
 
   return { confirmOpen, shuttingDown, stopped, timedOut, open, confirm, reset };
 }

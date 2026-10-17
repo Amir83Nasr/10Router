@@ -312,7 +312,11 @@ async function handleSingleModelChat(
       if (pid) {
         refreshedCredentials.projectId = pid;
         // Persist to DB in background so subsequent requests have it immediately
-        updateProviderCredentials(credentials.connectionId, { projectId: pid }).catch(() => {});
+        updateProviderCredentials(credentials.connectionId, { projectId: pid }).catch((err) => {
+          // Not fatal — next request re-resolves the projectId — but log it,
+          // otherwise a broken write silently costs latency on every request.
+          log.warn("CHAT", `failed to persist projectId for ${credentials.connectionId}:`, err);
+        });
       }
     }
 

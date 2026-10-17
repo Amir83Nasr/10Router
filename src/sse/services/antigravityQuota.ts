@@ -134,14 +134,18 @@ async function _doRefresh(
     const usage = await getAntigravityUsage(accessToken, providerSpecificData, proxyOptions);
     // 401/403 usage responses can contain an empty quotas object plus message.
     // Preserve known cache instead of replacing it with an upstream error response.
-    if (!usage?.quotas || usage.message) return null;
+    // (Empty `{}` is a valid empty snapshot, not a missing one.)
+    // Producer is untyped JS, so the shape is asserted at this boundary.
+    const quotas = usage?.quotas as
+      Record<string, { remainingPercentage: number; resetAt?: string }> | undefined;
+    if (!quotas || usage.message) return null;
 
     // Update in-memory cache. Caller logs CACHE_BLOCK only if requested model is exhausted.
     // Strike blocks are re-asserted after every refresh so an optimistic
     // upstream reading cannot resurrect a pair we just circuit-broke.
-    quotaCache.set(connectionId, applyActiveStrikeBlocks(connectionId, usage.quotas));
+    quotaCache.set(connectionId, applyActiveStrikeBlocks(connectionId, quotas));
 
-    return usage.quotas;
+    return quotas;
   } catch (e: any) {
     log.warn("AG_QUOTA", `${connectionId.slice(0, 8)} | refresh failed: ${e.message}`);
     return null;

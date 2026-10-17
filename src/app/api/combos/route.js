@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getCombos, createCombo, getComboByName } from "@/lib/localDb";
+import { getCombos, createCombo, getComboByName, getModelAliases } from "@/lib/localDb";
+import { findComboMemberProblems } from "@/lib/validateComboModels";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,31 @@ export async function POST(request) {
       return NextResponse.json({ error: "Combo name already exists" }, { status: 400 });
     }
 
-    const combo = await createCombo({ name, models: models || [], kind: kind || null });
+    // Validate members: bare words ("Support", "Last") die at request time
+    // with "Invalid model format", so reject them at save time instead.
+    const [aliases, combos] = await Promise.all([getModelAliases(), getCombos()]);
+    if (models !== undefined && !Array.isArray(models)) {
+      return NextResponse.json(
+        { error: "Invalid combo models: models must be an array" },
+        { status: 400 },
+      );
+    }
+    const cleanedModels = Array.isArray(models)
+      ? [...new Set(models.map((m) => (typeof m === "string" ? m.trim() : "")).filter(Boolean))]
+      : [];
+    const problems = findComboMemberProblems(cleanedModels, {
+      aliases,
+      comboNames: combos.map((c) => c.name),
+      selfName: name,
+    });
+    if (problems.length > 0) {
+      return NextResponse.json(
+        { error: `Invalid combo models: ${problems.join("; ")}` },
+        { status: 400 },
+      );
+    }
+
+    const combo = await createCombo({ name, models: cleanedModels, kind: kind || null });
 
     return NextResponse.json(combo, { status: 201 });
   } catch (error) {

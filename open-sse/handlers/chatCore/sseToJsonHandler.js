@@ -413,10 +413,17 @@ export async function handleForcedSSEToJson({
         "Invalid SSE response for non-streaming request",
       );
     if (parsed.error) {
-      return createErrorResult(
-        HTTP_STATUS.BAD_GATEWAY,
-        parsed.error.message || "Upstream SSE stream failed",
-      );
+      // Request-scoped errors (e.g. Zed context_length_exceeded, surfaced as an
+      // in-stream error frame) keep their own status: 400 must not cool the
+      // account via the fallback layer, and must reach the client as 400.
+      const upstreamCode = String(parsed.error.code || "");
+      const status =
+        parsed.error.type === "invalid_request_error" ||
+        upstreamCode === "context_length_exceeded" ||
+        upstreamCode === "bad_request"
+          ? HTTP_STATUS.BAD_REQUEST
+          : HTTP_STATUS.BAD_GATEWAY;
+      return createErrorResult(status, parsed.error.message || "Upstream SSE stream failed");
     }
 
     if (onRequestSuccess) await onRequestSuccess();

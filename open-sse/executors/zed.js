@@ -24,6 +24,8 @@ import { claudeToOpenAIResponse } from "../translator/response/claude-to-openai.
 import { geminiToOpenAIResponse } from "../translator/response/gemini-to-openai.js";
 import { openaiResponsesToOpenAIResponse } from "../translator/response/openai-responses.js";
 import { ZED_HEADERS, resolveZedModels, zedLlmFetch } from "../shared/zedAuth.js";
+import { estimateInputTokens } from "../utils/usageTracking.js";
+import { stripHistoryForContext } from "../services/capacityAdapter.js";
 
 // Wire values for the `provider` field of POST /completions. These are NOT
 // display names: cloud.zed.dev matches them exactly, and an unrecognized value
@@ -139,6 +141,29 @@ function normalizeStatus(status) {
   return null;
 }
 
+// Zed reports context overflow inside a `status:failed` frame on an HTTP-200
+// stream (and occasionally as a non-200 body) — never as a typed API error.
+// Detect it by wording so both paths below can treat it as request-scoped.
+const OVERFLOW_RE =
+  /context_length_exceeded|\bcontext\b.*\b(window|length|limit)\b|exceeds.*token|too many tokens|prompt (is )?too long|maximum.*token/i;
+
+function isContextOverflowText(value) {
+  return OVERFLOW_RE.test(String(value || ""));
+}
+
+// SSE error frame in the shared buildErrorBody shape ({error:{message,type,
+// code}}) so stream aggregation and clients treat it as a failure, not as
+// assistant text. Never a fabricated finish_reason.
+function createOverflowErrorFrame(message) {
+  return `data: ${JSON.stringify({
+    error: {
+      message,
+      type: "invalid_request_error",
+      code: "context_length_exceeded",
+    },
+  })}\n\n`;
+}
+
 function wrapZedCompletionStream(response, provider, model) {
   if (!response.ok || !response.body) return response;
 
@@ -169,8 +194,24 @@ function wrapZedCompletionStream(response, provider, model) {
       if (status?.type === "failed" || status?.failed) {
         const failed = status.failed || status;
         const message = String(failed.message || failed.error || failed.code || "request failed");
-        enqueueSseObject(controller, encoder, createErrorChunk(model, message));
-        finish(controller);
+        // Context overflow must be a clean error, not assistant text:
+        // clients aggregate delta.content into the answer, and the fallback
+        // layer keys off status — so emit the error frame + [DONE] with no
+        // fabricated finish_reason, and skip the trailing translate flush.
+        if (isContextOverflowText(message)) {
+          controller.enqueue(
+            encoder.encode(
+              createOverflowErrorFrame(
+                `Context window exceeded for ${model}: ${message}. ` +
+                  `Shorten the conversation or use a larger model.`,
+              ) + "data: [DONE]\n\n",
+            ),
+          );
+          done = true;
+        } else {
+          enqueueSseObject(controller, encoder, createErrorChunk(model, message));
+          finish(controller);
+        }
       } else if (status?.type === "stream_ended" || status === "stream_ended") {
         finish(controller);
       }
@@ -243,9 +284,52 @@ class ZedExecutor extends BaseExecutor {
   }
 
   async execute({ model, body, stream, credentials, signal, log, proxyOptions = null }) {
-    const { provider } = await this.resolveModel(model, credentials, signal, log, proxyOptions);
-    const providerRequest = buildProviderRequest(provider, model, body, stream, credentials);
-    const bodyRecord = body || {};
+    const { raw, provider } = await this.resolveModel(
+      model,
+      credentials,
+      signal,
+      log,
+      proxyOptions,
+    );
+    let requestBody = body || {};
+    // Pre-send context guard: Zed reports overflow as an in-stream
+    // `status:failed` frame (HTTP 200 already sent), which can only surface
+    // as assistant text — never as a clean error. Trim history to the
+    // catalog window first; fail fast with 400 (request-scoped, no account
+    // lock) when even the trimmed body doesn't fit.
+    const contextLimit = Number(raw?.max_token_count ?? raw?.maxTokenCount) || null;
+    if (contextLimit) {
+      if (estimateInputTokens(requestBody) > contextLimit) {
+        const trimmed = stripHistoryForContext(requestBody, contextLimit);
+        if (trimmed !== requestBody) {
+          log?.info?.("ZED", `trimmed history for ${model} to fit ${contextLimit} tokens`);
+          requestBody = trimmed;
+        }
+      }
+      const estimated = estimateInputTokens(requestBody);
+      if (estimated > contextLimit) {
+        const message =
+          `Context window exceeded: ~${estimated} tokens exceeds the limit of ` +
+          `${contextLimit} tokens for ${model}. Shorten the conversation or use a larger model.`;
+        return {
+          response: new Response(
+            JSON.stringify({
+              error: {
+                message,
+                type: "invalid_request_error",
+                code: "context_length_exceeded",
+              },
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } },
+          ),
+          url: `${this.config?.llmBaseUrl || "https://cloud.zed.dev"}/completions`,
+          headers: { "Content-Type": "application/json", Authorization: "Bearer <zed-llm-token>" },
+          transformedBody: { model, estimatedInputTokens: estimated, contextLimit },
+        };
+      }
+    }
+    const providerRequest = buildProviderRequest(provider, model, requestBody, stream, credentials);
+    const bodyRecord = requestBody;
     const payload = {
       thread_id: bodyRecord.thread_id || credentials?._clientSessionId,
       prompt_id: bodyRecord.prompt_id,
@@ -292,6 +376,15 @@ class ZedExecutor extends BaseExecutor {
     const errorObj = parsed?.error || undefined;
     const code = parsed?.code || errorObj?.code || "";
     const rawMessage = parsed?.message || errorObj?.message || bodyText || response.statusText;
+    // Overflow is request-scoped: return it as-is (no proxy/lock guidance, no
+    // retry wording) so the fallback layer hands it back without cooling the
+    // account. checkFallbackError already treats non-quota 400s this way.
+    if (code === "context_length_exceeded" || isContextOverflowText(rawMessage)) {
+      return {
+        status: 400,
+        message: `Context window exceeded for this request: ${rawMessage}. Shorten the conversation or use a larger model.`,
+      };
+    }
     if (code === "trial_blocked") {
       return {
         status: response.status,

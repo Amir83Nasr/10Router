@@ -94,11 +94,7 @@ export function createStreamController({
         return;
       }
 
-      logStream(
-        "ERROR",
-        `ERROR: ${error.message}${error.stack ? `\n    ${error.stack}` : ""}`,
-        true,
-      );
+      logStream("ERROR", `${error.message}${error.stack ? `\n    ${error.stack}` : ""}`, true);
       onError?.(error);
     },
 

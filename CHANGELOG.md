@@ -2,6 +2,12 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.11] — 2026-10-18
+
+- Fix: the CLI update notice never fired on networks that silently drop IPv6. `registry.npmjs.org` resolves to both A and AAAA records, so Node blackholes the first connection for ~10s before Happy Eyeballs falls back to IPv4, while the check aborted at 3s — a cold check routinely needs 2-14s. Measured 5/8 fetches and 1/12 notices here; the 10s budget now measures 8/8.
+- Fix: a failed check was never remembered, so every invocation re-paid the full timeout stall and then re-served the same stale version ("stale cache beats silence"). Failures are now recorded with a 10-minute cooldown (`FAIL_TTL`, mirroring `FAIL_TTL_MS` in `src/lib/versionCheck.js`), so an unreachable registry costs one stall per window instead of one per run, and a version published during the window still surfaces once the link recovers.
+- Tests: cover the failure memory (no retry inside the cooldown, retry past it) and the recovery path (a version published while the registry was down appears after the cooldown without waiting out `UPDATE_TTL`).
+
 ## [0.1.10] — 2026-10-18
 
 - Fix: every combo edit made from the dashboard failed with a 500 `Failed to update combo`. `PUT /api/combos/[id]` declared the parsed request body as `const` but reassigns it after cleaning the members array, so `Assignment to constant variable` was thrown inside the try and swallowed by the catch; only requests carrying `models` hit it, which is why name-only edits and combo creation worked. Introduced with the member-validation block in v0.1.9.

@@ -12,6 +12,18 @@ import path from "node:path";
 // per hour of CLI use; offline stays fail-open via stale-cache fallback.
 export const UPDATE_TTL = 3600 * 1000;
 
+// The registry resolves to both A and AAAA records. On networks that drop
+// IPv6 silently, Node's first connection attempt blackholes for ~10s before
+// Happy Eyeballs falls back to IPv4, so a cold check routinely needs 2-14s.
+// The old 3s budget aborted nearly every check on such links (measured 5/8),
+// and the failure then re-served the stale version — so 0.1.10 never showed.
+// 10s measured 8/8 here; FAIL_TTL bounds what a genuinely offline run costs.
+const FETCH_TIMEOUT_MS = 10000;
+
+// A failed check is remembered, so a bad network costs one stall per window
+// instead of one per invocation. Mirrors FAIL_TTL_MS in src/lib/versionCheck.js.
+export const FAIL_TTL = 10 * 60 * 1000;
+
 export function cmpVer(a, b) {
   const pa = String(a).replace(/^v/, "").split("-")[0].split(".").map(Number);
   const pb = String(b).replace(/^v/, "").split("-")[0].split(".").map(Number);
@@ -28,7 +40,7 @@ export function cmpVer(a, b) {
 export async function fetchLatest(pkgName, fetchFn = fetch) {
   try {
     const r = await fetchFn(`https://registry.npmjs.org/${pkgName.replace("/", "%2F")}/latest`, {
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!r.ok) return null;
     return (await r.json())?.version || null;
@@ -73,15 +85,26 @@ export async function checkUpdate({
       latest = cached?.latest && now - (cached.checkedAt || 0) < UPDATE_TTL ? cached.latest : null;
     }
     if (!latest) {
-      latest = await fetchLatest(pkg.name, fetchFn);
-      if (latest) {
+      // A recent failure means the registry was unreachable: re-fetching would
+      // re-pay the full timeout stall on every invocation. Serve stale instead.
+      const cooling = now - (cached?.failedAt || 0) < FAIL_TTL;
+      latest = cooling ? cached?.latest || null : await fetchLatest(pkg.name, fetchFn);
+      if (!cooling) {
         try {
           fs.mkdirSync(dataDir, { recursive: true });
-          fs.writeFileSync(cacheFile, JSON.stringify({ latest, checkedAt: now }));
+          fs.writeFileSync(
+            cacheFile,
+            // On failure keep the last-known version but mark it stale, so the
+            // notice still fires from cache while the fetch is in cooldown.
+            latest
+              ? JSON.stringify({ latest, checkedAt: now })
+              : JSON.stringify({ latest: cached?.latest || null, checkedAt: 0, failedAt: now }),
+          );
         } catch {
           /* cache best-effort */
         }
-      } else latest = cached?.latest || null; // stale cache beats silence
+      }
+      if (!latest) latest = cached?.latest || null; // stale cache beats silence
     }
     if (!latest || cmpVer(pkg.version, latest) >= 0) return null;
     const ua = env.npm_config_user_agent || "";

@@ -2,6 +2,11 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.10] — 2026-10-18
+
+- Fix: every combo edit made from the dashboard failed with a 500 `Failed to update combo`. `PUT /api/combos/[id]` declared the parsed request body as `const` but reassigns it after cleaning the members array, so `Assignment to constant variable` was thrown inside the try and swallowed by the catch; only requests carrying `models` hit it, which is why name-only edits and combo creation worked. Introduced with the member-validation block in v0.1.9.
+- Tests: cover the combo update path — model/name updates, member trim/dedupe, invalid-member rejection, and name-only updates — so a regression here fails loudly instead of returning an opaque 500.
+
 ## [0.1.9] — 2026-10-17
 
 - Zed: detect context-window overflow reported as an in-stream `status:failed` frame and return it as a request-scoped `400 context_length_exceeded` instead of assistant text — the account is no longer cooled down by the fallback layer. History is trimmed to the model's catalog limit before sending, and a pre-send guard fails fast when even the trimmed body does not fit.

@@ -31,6 +31,9 @@ export default {
       format: "openai",
       baseUrl: "https://opencode.ai/inference/go/v1/chat/completions",
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
+      // OpenAI dialect only: the gateway rejects `thinking`/`enable_thinking`
+      // (400 unknown field "thinking"), so normalize reasoning to reasoning_effort.
+      thinkingFormat: "openai",
     },
     {
       format: "claude",
@@ -41,6 +44,7 @@ export default {
       format: "openai-responses",
       baseUrl: "https://opencode.ai/inference/go/v1/responses",
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
+      thinkingFormat: "openai",
     },
   ],
   // supportedFormats follow the endpoint table in https://opencode.ai/v2/docs/console/go

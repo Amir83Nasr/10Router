@@ -5,6 +5,7 @@ import {
   CLAUDE_BLOCK,
   VALID_OPENAI_CONTENT_TYPES,
   VALID_OPENAI_MESSAGE_TYPES,
+  EMPTY_TOOL_RESULT,
 } from "../schema/index.js";
 
 // Re-export valid-type lists (moved to schema/blocks.js) to keep existing importers working.
@@ -26,8 +27,15 @@ export function filterToOpenAIFormat(body, opts = {}) {
     // Normalize developer role to system (many providers don't support developer)
     if (msg.role === ROLE.DEVELOPER) msg = { ...msg, role: ROLE.SYSTEM };
 
-    // Keep tool messages as-is (OpenAI format)
-    if (msg.role === ROLE.TOOL) return msg;
+    // Keep tool messages as-is (OpenAI format) — but an empty one is a 400 on
+    // several OpenAI-dialect upstreams ("Message content must contain text").
+    if (msg.role === ROLE.TOOL) {
+      const empty =
+        msg.content === "" ||
+        msg.content == null ||
+        (Array.isArray(msg.content) && msg.content.length === 0);
+      return empty ? { ...msg, content: EMPTY_TOOL_RESULT } : msg;
+    }
 
     // Keep assistant messages with tool_calls as-is
     if (msg.role === ROLE.ASSISTANT && msg.tool_calls) return msg;

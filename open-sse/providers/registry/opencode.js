@@ -19,6 +19,9 @@ export default {
     },
     forceStream: true,
     noAuth: true,
+    // OpenAI dialect only: the gateway rejects `thinking`/`enable_thinking`
+    // (400 unknown field "thinking"), so normalize reasoning to reasoning_effort.
+    thinkingFormat: "openai",
     quirks: {
       forceAutoToolChoiceModels: [
         "muse-spark-1.2-contributor-free",

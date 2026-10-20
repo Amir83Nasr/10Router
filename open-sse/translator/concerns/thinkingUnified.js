@@ -124,9 +124,24 @@ const NATIVE_ONLY_FORMATS = new Set([
   "kiro",
 ]); // "kiro" legacy (provider removed)
 
+// Provider/transport-level wire override. Multi-endpoint providers declare one
+// entry per endpoint format, so prefer the entry matching targetFormat; fall back
+// to the provider's default transport. The override describes an OpenAI-dialect
+// endpoint, so it only applies on OpenAI-family wires — a Claude/Gemini endpoint
+// keeps deriving its native thinking shape from the capabilities below.
+function providerThinkingFormat(provider, targetFormat) {
+  if (targetFormat !== "openai" && targetFormat !== "openai-responses") return null;
+  const cfg = provider ? PROVIDERS[provider] : null;
+  if (!cfg) return null;
+  const entry = Array.isArray(cfg.transports)
+    ? cfg.transports.find((t) => (t.format || "openai") === targetFormat) || cfg
+    : cfg;
+  return entry.thinkingFormat || null;
+}
+
 function resolveFormat(targetFormat, model, provider) {
   if (targetFormat === "commandcode") return "commandcode";
-  const providerFmt = provider ? PROVIDERS[provider]?.thinkingFormat : null;
+  const providerFmt = providerThinkingFormat(provider, targetFormat);
   if (providerFmt) return providerFmt;
   const caps = getCapabilitiesForModel(provider, model);
   const isOpenAIWire = targetFormat === "openai" || targetFormat === "openai-responses";

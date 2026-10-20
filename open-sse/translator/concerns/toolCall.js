@@ -1,6 +1,7 @@
 // Tool call helper functions for translator
 
 import { FORMATS } from "../formats.js";
+import { EMPTY_TOOL_RESULT } from "../schema/index.js";
 
 // Anthropic tool_use.id must match: ^[a-zA-Z0-9_-]+$
 const TOOL_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -147,7 +148,7 @@ export function fixMissingToolResponses(body) {
         newMessages.push({
           role: "tool",
           tool_call_id: id,
-          content: "",
+          content: EMPTY_TOOL_RESULT,
         });
       }
     }

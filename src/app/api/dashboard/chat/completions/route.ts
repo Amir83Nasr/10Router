@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 // The browser only holds the dashboard JWT. The LLM handler still enforces
 // requireApiKey, so reuse (or mint) a local key server-side; it never reaches the client.
-async function getInternalApiKey() {
+async function getInternalApiKey(): Promise<string> {
   const keys = await getApiKeys();
   const active = keys.find((k) => k.isActive !== false);
   if (active) return active.key;
@@ -14,15 +14,15 @@ async function getInternalApiKey() {
   return created.key;
 }
 
-export async function POST(request) {
-  let body;
+export async function POST(request: Request) {
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  let apiKey;
+  let apiKey: string;
   try {
     apiKey = await getInternalApiKey();
   } catch {

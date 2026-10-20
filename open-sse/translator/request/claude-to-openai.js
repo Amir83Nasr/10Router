@@ -2,7 +2,7 @@ import { register } from "../index.js";
 import { FORMATS } from "../formats.js";
 import { adjustMaxTokens } from "../formats/maxTokens.js";
 import { encodeDataUri } from "../concerns/image.js";
-import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK } from "../schema/index.js";
+import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK, EMPTY_TOOL_RESULT } from "../schema/index.js";
 import { collapseTextParts } from "../concerns/message.js";
 
 function stripAnthropicBillingHeader(text) {
@@ -62,7 +62,7 @@ export function claudeToOpenAIRequest(model, body, stream) {
   }
 
   // Fix missing tool responses - OpenAI requires every tool_call to have a response.
-  // Local variant: scans contiguous tool replies + inserts "[No response received]"
+  // Local variant: scans contiguous tool replies + inserts EMPTY_TOOL_RESULT
   // (distinct from the global immediate-next check in concerns/toolCall, runs on the openai leg).
   fixMissingToolResponsesOpenAI(result.messages);
 
@@ -123,7 +123,7 @@ function fixMissingToolResponsesOpenAI(messages) {
         const missingResponses = missingIds.map((id) => ({
           role: ROLE.TOOL,
           tool_call_id: id,
-          content: "[No response received]",
+          content: EMPTY_TOOL_RESULT,
         }));
         messages.splice(insertPosition, 0, ...missingResponses);
         i = insertPosition + missingResponses.length - 1;
@@ -216,7 +216,9 @@ function convertClaudeMessage(msg) {
             const textOnly = block.content.filter((c) => c?.type === CLAUDE_BLOCK.TEXT);
             resultContent =
               textOnly.map((c) => c.text).join("\n") ||
-              (resultImages.length ? "" : JSON.stringify(block.content));
+              (resultImages.length || block.content.length === 0
+                ? ""
+                : JSON.stringify(block.content));
           } else if (block.content) {
             resultContent = JSON.stringify(block.content);
           }
@@ -224,7 +226,9 @@ function convertClaudeMessage(msg) {
           toolResults.push({
             role: ROLE.TOOL,
             tool_call_id: block.tool_use_id,
-            content: resultContent,
+            // Empty content is a 400 on several OpenAI-dialect upstreams
+            // ("Message content must contain text"); keep a placeholder.
+            content: resultContent || EMPTY_TOOL_RESULT,
           });
           // The OpenAI tool role is text-only, so a screenshot or any other image a
           // tool returned would otherwise vanish. Hand it to the model in the user

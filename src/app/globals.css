@@ -300,57 +300,98 @@
 }
 
 /* ── MARKDOWN BODY ─────────────────────────────────────── */
-/* Changelog modal markdown. Scoped to ChangelogModal. */
-.changelog-body h1 {
+/* Shared by the changelog modal and chat assistant messages. */
+:is(.changelog-body, .chat-markdown) h1 {
   font-size: 1.4rem;
   font-weight: 700;
   margin: 1.5rem 0 0.75rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border);
 }
-.changelog-body h1:first-child {
+:is(.changelog-body, .chat-markdown) h1:first-child {
   margin-top: 0;
 }
-.changelog-body h2 {
+:is(.changelog-body, .chat-markdown) h2 {
   font-size: 1.3rem;
   font-weight: 700;
   margin: 2.25rem 0 0.6rem;
-  color: var(--primary);
 }
-.changelog-body h2:first-child {
+:is(.changelog-body, .chat-markdown) h2:first-child {
   margin-top: 0;
 }
-.changelog-body h3 {
+/* Changelog headings use --primary; chat keeps inherited color (its panel is always dark). */
+.changelog-body h2 {
+  color: var(--primary);
+}
+:is(.changelog-body, .chat-markdown) h3 {
   font-size: 0.95rem;
   font-weight: 600;
   margin: 0.75rem 0 0.4rem;
 }
-.changelog-body ul {
+:is(.changelog-body, .chat-markdown) ul {
   list-style: disc;
   padding-left: 1.5rem;
   margin: 0.5rem 0;
 }
-.changelog-body li {
+:is(.changelog-body, .chat-markdown) ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+:is(.changelog-body, .chat-markdown) li {
   margin: 0.25rem 0;
   line-height: 1.6;
 }
-.changelog-body p {
+:is(.changelog-body, .chat-markdown) p {
   margin: 0.5rem 0;
   line-height: 1.6;
 }
-.changelog-body code {
+:is(.changelog-body, .chat-markdown) code {
   background: var(--muted);
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
   font-size: 0.875em;
   font-family: ui-monospace, monospace;
 }
-.changelog-body a {
+:is(.changelog-body, .chat-markdown) pre {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+}
+:is(.changelog-body, .chat-markdown) pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.85em;
+  line-height: 1.55;
+}
+:is(.changelog-body, .chat-markdown) a {
   color: var(--primary);
   text-decoration: underline;
 }
-.changelog-body hr {
+:is(.changelog-body, .chat-markdown) hr {
   border: none;
   border-top: 1px solid var(--border);
   margin: 1.5rem 0;
+}
+
+/* Chat panel is always dark (#212121), so theme tokens resolve to light values there. */
+.chat-markdown h1 {
+  border-bottom-color: rgba(255, 255, 255, 0.15);
+}
+.chat-markdown code {
+  background: rgba(255, 255, 255, 0.1);
+}
+.chat-markdown pre {
+  background: rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.chat-markdown a {
+  color: #7cc4ff;
+}
+.chat-markdown hr {
+  border-top-color: rgba(255, 255, 255, 0.15);
 }

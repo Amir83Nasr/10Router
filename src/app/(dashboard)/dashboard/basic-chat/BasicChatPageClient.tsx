@@ -2,6 +2,8 @@
 import Icon from "@/shared/components/Icon";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import DOMPurify from "dompurify";
+import { marked } from "marked";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getModelsByProviderId } from "@/shared/constants/models";
@@ -9,6 +11,8 @@ import {
   isAnthropicCompatibleProvider,
   isOpenAICompatibleProvider,
 } from "@/shared/constants/providers";
+
+marked.setOptions({ gfm: true, breaks: true });
 
 const STORAGE_KEYS = {
   sessions: "basic-chat.sessions",
@@ -98,6 +102,28 @@ function readAssistantText(chunk) {
     .map(textValue)
     .filter(Boolean);
   return pieces[0] || "";
+}
+
+// Errors arrive as SSE events (`{ error }` or a Responses-style `{ type: "error" }`)
+// with no choices; the content-only parse would drop them and end the turn empty.
+function readChunkError(chunk) {
+  if (!chunk || typeof chunk !== "object") return "";
+  if (chunk.error) return textValue(chunk.error) || "Request failed";
+  if (chunk.type === "error") return textValue(chunk.message) || "Request failed";
+  return "";
+}
+
+function MarkdownMessage({ text }) {
+  const raw = textValue(text);
+  const html = useMemo(() => {
+    if (!raw) return "";
+    // DOMPurify needs a DOM; the server render has none (sessions hydrate from storage).
+    if (typeof window === "undefined") return null;
+    return DOMPurify.sanitize(marked.parse(raw, { async: false }));
+  }, [raw]);
+
+  if (html === null) return <span className="whitespace-pre-wrap break-words">{raw}</span>;
+  return <div className="chat-markdown break-words" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 async function fileToDataUrl(file) {
@@ -747,6 +773,7 @@ export default function BasicChatPageClient() {
       const decoder = new TextDecoder();
       let buffer = "";
       let assistantText = "";
+      let streamError = "";
 
       while (true) {
         const { value, done } = await reader.read();
@@ -765,6 +792,12 @@ export default function BasicChatPageClient() {
 
           try {
             const chunk = JSON.parse(payload);
+            const chunkError = readChunkError(chunk);
+            if (chunkError) {
+              streamError = chunkError;
+              continue;
+            }
+
             const text = readAssistantText(chunk);
             if (!text) continue;
 
@@ -787,13 +820,16 @@ export default function BasicChatPageClient() {
 
       updateSession(sessionId, (currentSession) => ({
         ...currentSession,
-        messages: currentSession.messages.map((message) =>
-          message.id === assistantMessageId
-            ? { ...message, content: assistantText || message.content, status: "done" }
-            : message,
-        ),
+        messages: currentSession.messages.map((message) => {
+          if (message.id !== assistantMessageId) return message;
+          if (!assistantText && streamError) {
+            return { ...message, content: message.content || streamError, status: "error" };
+          }
+          return { ...message, content: assistantText || message.content, status: "done" };
+        }),
         updatedAt: new Date().toISOString(),
       }));
+      if (!assistantText && streamError) setLoadError(streamError);
       finalizeSessionTitle(sessionId, userText);
     } catch (error) {
       if (error.name !== "AbortError") {
@@ -1036,8 +1072,10 @@ export default function BasicChatPageClient() {
                         </div>
                       ) : null}
 
-                      <div className="whitespace-pre-wrap break-words text-[15px] leading-7">
-                        {content}
+                      <div
+                        className={`break-words text-[15px] leading-7 ${isAssistant ? "" : "whitespace-pre-wrap"}`}
+                      >
+                        {isAssistant ? <MarkdownMessage text={content} /> : content}
                         {isAssistant && isStreaming && !streamingText ? (
                           <span className="inline-block animate-pulse">▋</span>
                         ) : null}

@@ -2,6 +2,14 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.12] — 2026-10-20
+
+- Fix: Claude Code routed through the `opencode` free lane failed tool calls with `400 unknown field "thinking"`. The OpenAI-dialect endpoint inherited the model's `zai`/`deepseek` capability thinking shape and sent `body.thinking`; the transport now declares `thinkingFormat: "openai"` (opencode, opencode-zen and opencode-go OpenAI transports) and `resolveFormat` prefers the transport matching the target format. Claude- and Gemini-format transports keep their native shape.
+- Fix: a stream that closed without `finish_reason` left the `tool_use` block open and the message unterminated, so the client dropped the turn as failed. The end-of-stream flush now closes open blocks, emits buffered tool arguments, and always sends `message_delta` + `message_stop`; truncated tool JSON degrades to `end_turn` instead of a broken `tool_use`.
+- Fix: empty `tool_result` content (empty array, image-only, or a missing response) was sent as `""` or `"[]"` and rejected by OpenAI-dialect upstreams with `Message content must contain text`. A shared `EMPTY_TOOL_RESULT` placeholder is now applied when converting Claude tool results, when backfilling missing tool responses, and in `filterToOpenAIFormat`.
+- Fix: the built-in chat page posted to `/api/dashboard/chat/completions`, a route that never existed, so every message 404'd. The route now delegates to `handleChat` and mints/reuses a local API key server-side; the page is reachable from the sidebar, renders markdown, and surfaces SSE error events.
+- Tests: `tests/unit/claude-code-tool-flow.test.js` covers the thinking wire format per provider/transport, stream finalize without `finish_reason`, truncated tool arguments, empty tool results, and the flush contract.
+
 ## [0.1.11] — 2026-10-18
 
 - Fix: the CLI update notice never fired on networks that silently drop IPv6. `registry.npmjs.org` resolves to both A and AAAA records, so Node blackholes the first connection for ~10s before Happy Eyeballs falls back to IPv4, while the check aborted at 3s — a cold check routinely needs 2-14s. Measured 5/8 fetches and 1/12 notices here; the 10s budget now measures 8/8.

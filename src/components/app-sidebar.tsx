@@ -31,7 +31,6 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { id: "chat", href: "/dashboard/basic-chat", label: "Chat", icon: "chat" },
   {
     id: "endpoint",
     href: "/dashboard",

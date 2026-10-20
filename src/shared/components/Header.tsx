@@ -145,14 +145,6 @@ const getPageInfo = (pathname) => {
       icon: "waypoints",
       breadcrumbs: [],
     };
-  if (pathname.includes("/basic-chat"))
-    return {
-      title: "Chat",
-      description: "Test any connected model",
-      icon: "chat",
-      breadcrumbs: [],
-    };
-
   if (pathname.includes("/endpoint"))
     return {
       title: "Endpoint",

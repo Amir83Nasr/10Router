@@ -80,14 +80,8 @@ function DashboardShell({ children }: { children: ReactNode }) {
       {/* Main content */}
       <SidebarInset className="flex flex-col h-full min-w-0 relative transition-colors duration-300 isolate">
         <Header key={pathname} onMenuClick={toggleSidebar} />
-        <div
-          className={`dashboard-grid-bg flex-1 overflow-y-auto ${pathname === "/dashboard/basic-chat" ? "" : "p-6 lg:p-10"} ${pathname === "/dashboard/basic-chat" ? "flex flex-col overflow-hidden" : ""}`}
-        >
-          <div
-            className={`${pathname === "/dashboard/basic-chat" ? "flex-1 w-full h-full flex flex-col" : "max-w-7xl mx-auto"}`}
-          >
-            {children}
-          </div>
+        <div className="dashboard-grid-bg flex-1 overflow-y-auto p-6 lg:p-10">
+          <div className="max-w-7xl mx-auto">{children}</div>
         </div>
       </SidebarInset>
     </>

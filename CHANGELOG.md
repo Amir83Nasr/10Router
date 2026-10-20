@@ -2,6 +2,12 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.13] — 2026-10-21
+
+- Removed the built-in chat page (`/dashboard/basic-chat`) and its sidebar entry. The page was a thin UI over `/v1/chat/completions` with sessions kept in `localStorage`, and nothing else in the app linked to it. The `/api/dashboard/chat/completions` route it called is gone as well — the OpenAI-compatible `/v1/chat/completions` endpoint is unchanged.
+- The dashboard layout no longer special-cases the chat route: every page uses the same padding and content width again.
+- The markdown styles shared with the chat panel are now scoped to the changelog modal only, and the `dompurify` dependency the chat page introduced was dropped (`marked` stays — the changelog modal still uses it).
+
 ## [0.1.12] — 2026-10-20
 
 - Fix: Claude Code routed through the `opencode` free lane failed tool calls with `400 unknown field "thinking"`. The OpenAI-dialect endpoint inherited the model's `zai`/`deepseek` capability thinking shape and sent `body.thinking`; the transport now declares `thinkingFormat: "openai"` (opencode, opencode-zen and opencode-go OpenAI transports) and `resolveFormat` prefers the transport matching the target format. Claude- and Gemini-format transports keep their native shape.

@@ -2,6 +2,11 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.14] — 2026-10-21
+
+- Fix: Claude Code never showed its task list when the model was routed through this gateway. The CLI only advertises `TodoWrite`/`TodoRead` when the model id is one of Anthropic's own (an internal allowlist), and every routed model is a custom id (`oc/...`, a combo name, …), so the todo tools silently disappeared. The Claude settings route now writes `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` alongside the gateway env, and the card's env preview shows the same flag. The key comes from the new `CLI_TOOLS.claude.envVars.todoTools` constant and is reset with the rest of the gateway env keys.
+- Tests: `tests/unit/claude-settings-todo-tools.test.js` covers the route writing the flag next to the existing settings and the reset removing it.
+
 ## [0.1.13] — 2026-10-21
 
 - Removed the built-in chat page (`/dashboard/basic-chat`) and its sidebar entry. The page was a thin UI over `/v1/chat/completions` with sessions kept in `localStorage`, and nothing else in the app linked to it. The `/api/dashboard/chat/completions` route it called is gone as well — the OpenAI-compatible `/v1/chat/completions` endpoint is unchanged.

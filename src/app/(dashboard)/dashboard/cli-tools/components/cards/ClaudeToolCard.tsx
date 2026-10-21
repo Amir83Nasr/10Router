@@ -250,6 +250,12 @@ export default function ClaudeToolCard({
         // model ids never match, so the escape-hatch flag must ride along.
         env[tool.envVars.todoTools] = "1";
       }
+      if (tool.envVars?.autoModeServer) {
+        // Auto mode asks the Anthropic API to review actions in-band. A gateway
+        // cannot provide that review, so declaring it skips the dead round-trip
+        // and the classifier billing notice; the local classifier still runs.
+        env[tool.envVars.autoModeServer] = "0";
+      }
       const res = await fetch("/api/cli-tools/claude-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -330,6 +336,12 @@ export default function ClaudeToolCard({
       // Claude Code hides TodoWrite behind an Anthropic-model allowlist; routed
       // model ids never match, so the escape-hatch flag must ride along.
       env[tool.envVars.todoTools] = "1";
+    }
+    if (tool.envVars?.autoModeServer) {
+      // Auto mode asks the Anthropic API to review actions in-band. A gateway
+      // cannot provide that review, so declaring it skips the dead round-trip
+      // and the classifier billing notice; the local classifier still runs.
+      env[tool.envVars.autoModeServer] = "0";
     }
 
     return [

@@ -177,10 +177,24 @@ export async function handleChatCore({
     }
   }
 
+  // Client preference (what the response must look like) is independent of the
+  // transport a provider needs. `stream` below is the upstream flag; the
+  // client-facing decision is `clientWantsJson` further down.
+  const acceptHeader = clientRawRequest?.headers?.accept || "";
+  const clientPrefersJson = acceptHeader.includes("application/json");
+  const clientPrefersSSE = acceptHeader.includes("text/event-stream");
   const clientRequestedStreaming =
     body.stream === true || sourceFormat === FORMATS.ANTIGRAVITY || sourceFormat === FORMATS.GEMINI;
   const providerRequiresStreaming = PROVIDERS[provider]?.forceStream === true;
-  let stream = providerRequiresStreaming ? true : body.stream !== false;
+  // Anthropic Messages defaults to a JSON body when `stream` is omitted; OpenAI
+  // chat callers have historically been served SSE in that case here. An
+  // explicit Accept: text/event-stream still opts a Claude client into SSE.
+  const sourceDefaultsToJson = sourceFormat === FORMATS.CLAUDE && !clientPrefersSSE;
+  let stream = providerRequiresStreaming
+    ? true
+    : body.stream === undefined
+      ? !sourceDefaultsToJson
+      : body.stream !== false;
 
   // Image generation models require non-streaming (Google v1internal:generateContent)
   const modelType = getModelType(alias, model);
@@ -197,9 +211,8 @@ export async function handleChatCore({
 
   // Check client Accept header preference for non-streaming requests
   // This fixes AI SDK compatibility where clients send Accept: application/json
-  const acceptHeader = clientRawRequest?.headers?.accept || "";
-  const clientPrefersJson = acceptHeader.includes("application/json");
-  const clientPrefersSSE = acceptHeader.includes("text/event-stream");
+  // (`acceptHeader`, `clientPrefersJson` and `clientPrefersSSE` are resolved
+  // with the stream negotiation above so both decisions share one reading.)
   if (
     clientPrefersJson &&
     !clientPrefersSSE &&
@@ -291,6 +304,21 @@ export async function handleChatCore({
     delete translatedBody._customToolNames;
     translatedBody.model = stripThinkingSuffix(upstreamModel);
     stripContinuityFields(translatedBody);
+  }
+
+  // Reasoning depth is a model capability, so a model that cannot reason silently
+  // loses the client's effort selection inside applyThinking. Report that drop
+  // once per request: without it an ignored effort looks like a provider quirk.
+  const requestedThinking = extractThinking(body);
+  if (requestedThinking && requestedThinking.mode !== "none") {
+    const thinkingCaps = getCapabilitiesForModel(provider, stripThinkingSuffix(upstreamModel));
+    if (!thinkingCaps.reasoning) {
+      const requested = log?.fmtThink?.(requestedThinking) || requestedThinking.mode;
+      log?.warn?.(
+        "THINKING",
+        `${provider}/${model} cannot reason — requested ${requested} omitted`,
+      );
+    }
   }
 
   // Dedupe duplicate built-in tools when equivalent MCP tools are present (Claude clients only).
@@ -687,9 +715,20 @@ export async function handleChatCore({
     appendRequestLog({ model, provider, connectionId, ...extra }).catch(() => {});
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 
-  // Provider forced streaming but client wants JSON
-  if (!clientRequestedStreaming && providerRequiresStreaming) {
-    const result = await handleForcedSSEToJson({
+  // The client did not ask for SSE: either the provider only streams, or the
+  // request was negotiated as JSON. Aggregating the upstream stream is tried
+  // first; it declines a non-SSE body so a provider that ignored `stream` — or
+  // one that answered JSON on a forced-stream endpoint — still reaches the
+  // ordinary non-streaming handler instead of being written as an SSE response.
+  const clientWantsJson =
+    !stream ||
+    (providerRequiresStreaming && !clientRequestedStreaming && !clientPrefersSSE) ||
+    // Source-format contract: an Anthropic Messages client that did not ask to
+    // stream keeps a JSON body even if its provider forces streaming upstream.
+    (sourceFormat === FORMATS.CLAUDE && body.stream !== true && !clientPrefersSSE);
+
+  if (clientWantsJson) {
+    const forcedResult = await handleForcedSSEToJson({
       ...sharedCtx,
       providerResponse,
       sourceFormat,
@@ -699,14 +738,11 @@ export async function handleChatCore({
       trackDone,
       appendLog,
     });
-    if (result) {
+    if (forcedResult) {
       streamController.handleComplete();
-      return result;
+      return forcedResult;
     }
-  }
 
-  // True non-streaming response
-  if (!stream) {
     const result = await handleNonStreamingResponse({
       ...sharedCtx,
       providerResponse,

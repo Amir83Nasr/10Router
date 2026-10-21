@@ -276,7 +276,12 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display) {
         break;
       }
       const level = toLevel(eff);
-      if (level) body.reasoning_effort = normalizeOpenAILevel(level, supportedLevels);
+      // "auto" (adaptive thinking, no explicit effort) is not a member of the
+      // OpenAI reasoning_effort enum. Omitting the field is the only way to say
+      // "provider default" — every declared enum value names a specific depth.
+      if (level && level !== "auto") {
+        body.reasoning_effort = normalizeOpenAILevel(level, supportedLevels);
+      }
       break;
     }
     case "claude-adaptive": {
@@ -335,13 +340,17 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display) {
         const zaiLvl = toLevel(eff);
         // GLM-5.3 only accepts exactly low|high|max (anything else errors); GLM-5.2 accepts
         // a wider set but z.ai maps low/medium->high and xhigh->max server-side anyway, so
-        // this 3-value mapping matches both.
-        body.reasoning_effort =
+        // this 3-value mapping matches both. No explicit effort ("auto") omits the field:
+        // the fallback below would otherwise turn "let the model decide" into max.
+        const mapped =
           zaiLvl === "low" || zaiLvl === "minimal"
             ? "low"
             : zaiLvl === "high" || zaiLvl === "medium"
               ? "high"
-              : "max";
+              : zaiLvl === "xhigh" || zaiLvl === "max"
+                ? "max"
+                : null;
+        if (mapped) body.reasoning_effort = mapped;
       }
       break;
     }
@@ -394,7 +403,9 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display) {
     case "step": {
       if (none && canDisable) break;
       const level = toLevel(eff);
-      if (level) body.reasoning_effort = level === "xhigh" || level === "max" ? "high" : level;
+      // "auto" is not in Step's low|medium|high enum — omit and take the default.
+      if (level && level !== "auto")
+        body.reasoning_effort = level === "xhigh" || level === "max" ? "high" : level;
       break;
     }
     case "tokenrouter": {
@@ -416,7 +427,8 @@ function applyFormat(fmt, body, cfg, caps, supportedLevels, display) {
         break;
       }
       const level = toLevel(eff);
-      if (level) body.params.reasoning_effort = level;
+      // Native CLI accepts named levels only; "auto" means "no preference" → omit.
+      if (level && level !== "auto") body.params.reasoning_effort = level;
       break;
     }
     default:

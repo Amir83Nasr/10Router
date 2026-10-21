@@ -10,7 +10,12 @@ import {
   saveUsageStats,
   formatDoneLine,
 } from "./requestDetail.js";
-import { ROLE, RESPONSES_ITEM } from "../../translator/schema/index.js";
+import { ROLE, RESPONSES_ITEM, CLAUDE_BLOCK } from "../../translator/schema/index.js";
+import {
+  chatCompletionToClaudeMessage,
+  claudeMessageToChatCompletion,
+  parseClaudeSSEToMessage,
+} from "./claudeMessageBody.js";
 
 // Responses-API providers (e.g. codex) may emit SSE without content-type + use Responses output shape
 const isResponsesProvider = (p) => PROVIDERS[p]?.format === FORMATS.OPENAI_RESPONSES;
@@ -227,10 +232,15 @@ export async function handleForcedSSEToJson({
   log,
 }) {
   const contentType = providerResponse.headers.get("content-type") || "";
+  // Responses-API providers (codex) are known to stream without a content type;
+  // for every other provider an absent header means the body is not a stream we
+  // may consume here — returning null leaves it intact for the JSON handler.
   const isSSE =
     contentType.includes("text/event-stream") ||
     (contentType === "" && isResponsesProvider(provider));
-  if (!isSSE) return null; // not handled here
+  // Not an aggregated stream — the caller falls back to the JSON handler. The
+  // pending counter must stay untouched here: this handler did not serve it.
+  if (!isSSE) return null;
 
   trackDone();
 
@@ -251,6 +261,15 @@ export async function handleForcedSSEToJson({
   if (isCodexResponsesApi) {
     try {
       const jsonResponse = await convertResponsesStreamToJson(providerResponse.body);
+      // A `response.failed` event is the upstream's own failure signal; an empty
+      // "successful" body would hide it from the client.
+      if (jsonResponse.status === "failed") {
+        appendLog({ status: `FAILED ${HTTP_STATUS.BAD_GATEWAY}` });
+        return createErrorResult(
+          HTTP_STATUS.BAD_GATEWAY,
+          "Upstream Responses stream reported failure",
+        );
+      }
       if (onRequestSuccess) await onRequestSuccess();
 
       const usage = jsonResponse.usage || {};
@@ -345,7 +364,36 @@ export async function handleForcedSSEToJson({
       }));
       const hasToolCalls = toolCalls.length > 0;
 
-      if (sourceFormat === FORMATS.ANTIGRAVITY || sourceFormat === FORMATS.GEMINI) {
+      if (sourceFormat === FORMATS.CLAUDE) {
+        // The client speaks Anthropic Messages: reuse the same conversion a
+        // chat-native upstream gets, so both forced-stream upstream dialects
+        // produce one identical Claude body.
+        finalResp = chatCompletionToClaudeMessage({
+          id: jsonResponse.id,
+          created: jsonResponse.created_at,
+          model: jsonResponse.model || model,
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: ROLE.ASSISTANT,
+                content: textContent,
+                ...(hasToolCalls ? { tool_calls: toolCalls } : {}),
+              },
+              finish_reason: hasToolCalls
+                ? "tool_calls"
+                : jsonResponse.status === "completed" || jsonResponse.status === "done"
+                  ? "stop"
+                  : jsonResponse.status || "stop",
+            },
+          ],
+          usage: {
+            prompt_tokens: inTokens,
+            completion_tokens: outTokens,
+            ...cacheDetails,
+          },
+        });
+      } else if (sourceFormat === FORMATS.ANTIGRAVITY || sourceFormat === FORMATS.GEMINI) {
         finalResp = {
           response: {
             candidates: [
@@ -406,6 +454,94 @@ export async function handleForcedSSEToJson({
   // Standard Chat Completions SSE path
   try {
     const sseText = await providerResponse.text();
+
+    // A provider that speaks Claude on the wire (opencode's `union-alpha`, any
+    // anthropic-compatible endpoint) streams Anthropic events, which the chat
+    // aggregator cannot fold — it would produce an empty message. Aggregate in
+    // the format the upstream actually used.
+    //
+    // `targetFormat` is what we asked for, not proof of what came back: some
+    // providers answer their Claude transport in OpenAI dialect. The aggregator
+    // returns null when no Anthropic event was seen, and the standard chat path
+    // below then handles the body it really is.
+    const isClaudeUpstream =
+      targetFormat === FORMATS.CLAUDE || /"type"\s*:\s*"message_start"/.test(sseText);
+    const claudeMessage = isClaudeUpstream ? parseClaudeSSEToMessage(sseText, model) : null;
+    if (claudeMessage) {
+      const message = claudeMessage;
+      if (message.error) {
+        const upstreamCode = String(message.error.code || "");
+        const status =
+          message.error.type === "invalid_request_error" ||
+          upstreamCode === "context_length_exceeded" ||
+          upstreamCode === "bad_request"
+            ? HTTP_STATUS.BAD_REQUEST
+            : HTTP_STATUS.BAD_GATEWAY;
+        return createErrorResult(status, message.error.message || "Upstream SSE stream failed");
+      }
+
+      if (onRequestSuccess) await onRequestSuccess();
+
+      const usage = message.usage || {};
+      appendLog({ tokens: usage, status: "200 OK" });
+      saveUsageStats({
+        provider,
+        model,
+        tokens: usage,
+        connectionId,
+        apiKey,
+        endpoint: clientRawRequest?.endpoint,
+        silent: true,
+      });
+      if (log?.line)
+        log.line(
+          reqTag,
+          "DONE",
+          formatDoneLine({ usage, latency: { total: Date.now() - requestStartTime } }),
+        );
+
+      const totalLatency = Date.now() - requestStartTime;
+      const textBlocks = (message.content || []).filter((b) => b.type === CLAUDE_BLOCK.TEXT);
+      const thinkingBlocks = (message.content || []).filter(
+        (b) => b.type === CLAUDE_BLOCK.THINKING,
+      );
+      saveRequestDetail(
+        buildRequestDetail(
+          {
+            ...ctx,
+            latency: { ttft: totalLatency, total: totalLatency },
+            tokens: {
+              prompt_tokens: usage.input_tokens || 0,
+              completion_tokens: usage.output_tokens || 0,
+            },
+            response: {
+              content: textBlocks.map((b) => b.text || "").join("") || null,
+              thinking: thinkingBlocks.map((b) => b.thinking || "").join("") || null,
+              finish_reason: message.stop_reason || "unknown",
+            },
+            status: "success",
+          },
+          { endpoint: clientRawRequest?.endpoint || null },
+        ),
+      ).catch(() => {});
+
+      // Claude → chat conversion only when the client asked for chat; a Claude
+      // client (or any other) receives the aggregated message unchanged.
+      const finalBody =
+        sourceFormat === FORMATS.CLAUDE
+          ? message
+          : sourceFormat === FORMATS.OPENAI
+            ? claudeMessageToChatCompletion(message)
+            : message;
+
+      return {
+        success: true,
+        response: new Response(JSON.stringify(restoreToolNames(finalBody, toolNameMap)), {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        }),
+      };
+    }
+
     const parsed = parseSSEToOpenAIResponse(sseText, model);
     if (!parsed)
       return createErrorResult(
@@ -491,10 +627,17 @@ export async function handleForcedSSEToJson({
     // lost on the non-streaming return path. Inlined (not imported from
     // nonStreamingHandler.js) to avoid a circular import: nonStreamingHandler
     // already imports parseSSEToOpenAIResponse from this module.
+    // A Claude-format client gets an Anthropic `message`, never a raw
+    // `chat.completion`. Every non-streaming /v1/messages request lands here
+    // when the provider forces streaming (opencode, codex, zed, openai), and
+    // Claude Code reads `message.content[]` — an OpenAI body throws a TypeError
+    // inside the client, which auto mode reports as "classifier unavailable".
     const finalBody =
       sourceFormat === FORMATS.OPENAI_RESPONSES
         ? chatCompletionToResponses(parsed, customToolNames)
-        : parsed;
+        : sourceFormat === FORMATS.CLAUDE
+          ? chatCompletionToClaudeMessage(parsed)
+          : parsed;
 
     return {
       success: true,

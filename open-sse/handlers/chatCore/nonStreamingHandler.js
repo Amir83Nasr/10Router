@@ -1,6 +1,5 @@
 import { FORMATS } from "../../translator/formats.js";
 import { needsTranslation } from "../../translator/index.js";
-import { fromOpenAIFinish } from "../../translator/concerns/finishReason.js";
 import { addBufferToUsage, filterUsageForFormat } from "../../utils/usageTracking.js";
 import { createErrorResult } from "../../utils/error.js";
 import { HTTP_STATUS } from "../../config/runtimeConfig.js";
@@ -16,57 +15,11 @@ import { appendRequestLog, saveRequestDetail } from "@/lib/usageDb.js";
 import { decloakToolNames } from "../../utils/claudeCloaking.js";
 import { restoreToolNames } from "../../utils/opencodeFingerprint.js";
 import { ROLE, RESPONSES_ITEM } from "../../translator/schema/index.js";
-
-function parseToolArguments(value) {
-  if (!value) return {};
-  if (typeof value === "object") return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return {};
-  }
-}
-
-function openAICompletionToClaudeMessage(responseBody) {
-  if (!responseBody?.choices?.[0]) return responseBody;
-  const choice = responseBody.choices[0];
-  const message = choice.message || {};
-  const content = [];
-
-  const reasoning =
-    message.reasoning_content || message.provider_specific_fields?.reasoning_content || "";
-  if (reasoning) {
-    content.push({ type: "thinking", thinking: reasoning });
-  }
-  if (typeof message.content === "string" && message.content.length > 0) {
-    content.push({ type: "text", text: message.content });
-  }
-  for (const toolCall of message.tool_calls || []) {
-    const fn = toolCall.function || {};
-    content.push({
-      type: "tool_use",
-      id: toolCall.id || `toolu_${Date.now()}_${content.length}`,
-      name: fn.name || toolCall.name || "",
-      input: parseToolArguments(fn.arguments || toolCall.arguments),
-    });
-  }
-  if (content.length === 0) content.push({ type: "text", text: "" });
-
-  const usage = responseBody.usage || {};
-  return {
-    id: String(responseBody.id || `msg_${Date.now()}`).replace(/^chatcmpl-/, ""),
-    type: "message",
-    role: "assistant",
-    model: responseBody.model || "unknown",
-    content,
-    stop_reason: fromOpenAIFinish(choice.finish_reason, FORMATS.CLAUDE),
-    stop_sequence: null,
-    usage: {
-      input_tokens: usage.prompt_tokens || usage.input_tokens || 0,
-      output_tokens: usage.completion_tokens || usage.output_tokens || 0,
-    },
-  };
-}
+import {
+  chatCompletionToClaudeMessage,
+  claudeMessageToChatCompletion,
+  parseClaudeSSEToMessage,
+} from "./claudeMessageBody.js";
 
 /**
  * Convert an OpenAI Chat Completions non-streaming response body into the
@@ -174,7 +127,7 @@ export function translateNonStreamingResponse(
     return openAICompletionToResponses(responseBody, customToolNames);
   }
   if (targetFormat === FORMATS.OPENAI && sourceFormat === FORMATS.CLAUDE) {
-    return openAICompletionToClaudeMessage(responseBody);
+    return chatCompletionToClaudeMessage(responseBody);
   }
   if (targetFormat === FORMATS.OPENAI) return responseBody;
 
@@ -240,7 +193,9 @@ export function translateNonStreamingResponse(
         result.usage.completion_tokens_details = { reasoning_tokens: usage.thoughtsTokenCount };
       }
     }
-    return result;
+    // Gemini is the last branch that could hand a Claude client a
+    // `chat.completion`; the client reads `message.content[]` and throws.
+    return sourceFormat === FORMATS.CLAUDE ? chatCompletionToClaudeMessage(result) : result;
   }
 
   // Claude
@@ -249,61 +204,9 @@ export function translateNonStreamingResponse(
     // missing/null (e.g. M3 with max_tokens:1 spends the budget on thinking
     // and returns `content: null`). Returning the raw body would leave the
     // OpenAI client without a `choices` array and surface as a UI test error.
-    // Early return if the response is already in OpenAI format (has choices array)
-    // or if it has content as a non-array value (likely a different non-Claude format).
-    // Some providers (e.g. xiaomi-tokenplan) return OpenAI-format responses even when
-    // the request was translated to Claude format — the targetFormat is Claude but the
-    // actual response is OpenAI-native and needs no further translation.
-    if (responseBody.choices || (responseBody.content && !Array.isArray(responseBody.content)))
-      return responseBody;
-
-    let textContent = "",
-      thinkingContent = "";
-    const toolCalls = [];
-
-    for (const block of responseBody.content || []) {
-      if (block.type === "text") {
-        // Strip markdown code block markers (e.g. kimi wraps JSON in ```json...```)
-        const raw = block.text ?? "";
-        const text = raw.replace(/^\s*```\s*json\s*\n?/i, "").replace(/\n?\s*```\s*$/i, "");
-        textContent += text;
-      } else if (block.type === "thinking") thinkingContent += block.thinking || "";
-      else if (block.type === "tool_use") {
-        toolCalls.push({
-          id: block.id,
-          type: "function",
-          function: { name: block.name, arguments: JSON.stringify(block.input || {}) },
-        });
-      }
-    }
-
-    const message = { role: "assistant" };
-    if (textContent) message.content = textContent;
-    if (thinkingContent) message.reasoning_content = thinkingContent;
-    if (toolCalls.length > 0) message.tool_calls = toolCalls;
-    if (!message.content && !message.tool_calls) message.content = "";
-
-    let finishReason = responseBody.stop_reason || "stop";
-    if (finishReason === "end_turn") finishReason = "stop";
-    if (finishReason === "tool_use") finishReason = "tool_calls";
-
-    const result = {
-      id: `chatcmpl-${responseBody.id || Date.now()}`,
-      object: "chat.completion",
-      created: Math.floor(Date.now() / 1000),
-      model: responseBody.model || "claude",
-      choices: [{ index: 0, message, finish_reason: finishReason }],
-    };
-
-    if (responseBody.usage) {
-      result.usage = {
-        prompt_tokens: responseBody.usage.input_tokens || 0,
-        completion_tokens: responseBody.usage.output_tokens || 0,
-        total_tokens:
-          (responseBody.usage.input_tokens || 0) + (responseBody.usage.output_tokens || 0),
-      };
-    }
-    return result;
+    // A body already in OpenAI shape (or with non-array content) passes through
+    // untouched — some providers answer chat-native regardless of the request.
+    return claudeMessageToChatCompletion(responseBody);
   }
 
   return responseBody;
@@ -342,7 +245,30 @@ export async function handleNonStreamingResponse({
 
   if (contentType.includes("text/event-stream")) {
     const sseText = await providerResponse.text();
-    const parsed = parseSSEToOpenAIResponse(sseText, model);
+    // The upstream chose to stream a body we wanted as JSON. Aggregate in the
+    // format it actually used: a Claude-dialect provider emits Anthropic events
+    // that the chat aggregator would fold into an empty message. The parser
+    // returns null for a non-Anthropic body, and throws on a tool block whose
+    // arguments are not an object — both must reach the caller as an error
+    // result, never as an uncaught throw.
+    let claudeMessage = null;
+    try {
+      const isClaudeUpstream =
+        targetFormat === FORMATS.CLAUDE || /"type"\s*:\s*"message_start"/.test(sseText);
+      claudeMessage = isClaudeUpstream ? parseClaudeSSEToMessage(sseText, model) : null;
+    } catch (err) {
+      appendLog({ status: `FAILED ${HTTP_STATUS.BAD_GATEWAY}` });
+      log?.error?.("CHAT", `Claude SSE aggregation failed for ${provider}: ${err.message}`);
+      return createErrorResult(HTTP_STATUS.BAD_GATEWAY, err.message);
+    }
+    if (claudeMessage?.error) {
+      appendLog({ status: `FAILED ${HTTP_STATUS.BAD_GATEWAY}` });
+      return createErrorResult(
+        HTTP_STATUS.BAD_GATEWAY,
+        claudeMessage.error.message || "Upstream SSE stream failed",
+      );
+    }
+    const parsed = claudeMessage || parseSSEToOpenAIResponse(sseText, model);
     if (!parsed) {
       appendLog({ status: `FAILED ${HTTP_STATUS.BAD_GATEWAY}` });
       return createErrorResult(

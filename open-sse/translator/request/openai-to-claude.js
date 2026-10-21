@@ -31,6 +31,17 @@ export function openaiToClaudeRequest(model, body, stream) {
     result.temperature = body.temperature;
   }
 
+  if (body.top_p !== undefined) result.top_p = body.top_p;
+
+  // stop → stop_sequences. OpenAI accepts a single string or an array; Claude
+  // only takes an array. Round-tripping this keeps a stop-terminated answer
+  // identical in both directions.
+  if (typeof body.stop === "string" && body.stop) {
+    result.stop_sequences = [body.stop];
+  } else if (Array.isArray(body.stop) && body.stop.length > 0) {
+    result.stop_sequences = body.stop;
+  }
+
   // Messages
   result.messages = [];
   const systemParts = [];

@@ -6,10 +6,15 @@ import path from "node:path";
 import { POST, DELETE } from "../../src/app/api/cli-tools/claude-settings/route.js";
 
 // ── CLAUDE SETTINGS ROUTE (sandboxed HOST_HOME) ──────────
-// Claude Code only advertises TodoWrite/TodoRead when the model id is one of
-// Anthropic's own; every routed model is a custom id, so the route must write
-// CLAUDE_CODE_ENABLE_TODO_TOOLS=1 alongside the gateway config.
-describe("claude-settings route todo tools flag", () => {
+// Two Claude Code gates need a flag the client never sets on its own behind a
+// gateway:
+//   · TodoWrite/TodoRead are only offered for Anthropic's own model ids, so a
+//     routed model id never gets the task list (CLAUDE_CODE_ENABLE_TODO_TOOLS).
+//   · Auto mode's server-side classifier review asks the Anthropic API, which a
+//     gateway cannot provide; without a declaration the CLI spends a dead
+//     round-trip and shows its billing notice first
+//     (CLAUDE_CODE_AUTO_MODE_SERVER=0).
+describe("claude-settings route gateway flags", () => {
   let tmp;
   const realHostHome = process.env.HOST_HOME;
   const settingsPath = () => path.join(tmp, ".claude", "settings.json");
@@ -27,7 +32,7 @@ describe("claude-settings route todo tools flag", () => {
     await fs.rm(tmp, { recursive: true, force: true });
   });
 
-  it("POST writes CLAUDE_CODE_ENABLE_TODO_TOOLS=1 and keeps existing settings", async () => {
+  it("POST writes the todo-tools and auto-mode flags and keeps existing settings", async () => {
     await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
     await fs.writeFile(settingsPath(), JSON.stringify({ theme: "dark", env: { KEEP: "me" } }));
 
@@ -41,14 +46,16 @@ describe("claude-settings route todo tools flag", () => {
     expect(settings.env.KEEP).toBe("me");
     expect(settings.env.ANTHROPIC_BASE_URL).toBe("http://localhost:20128/v1");
     expect(settings.env.CLAUDE_CODE_ENABLE_TODO_TOOLS).toBe("1");
+    expect(settings.env.CLAUDE_CODE_AUTO_MODE_SERVER).toBe("0");
   });
 
-  it("DELETE removes the flag along with the gateway env", async () => {
+  it("DELETE removes the flags along with the gateway env", async () => {
     const res = await DELETE();
     expect(res.status).toBe(200);
 
     const settings = await readSettings();
     expect(settings.env?.CLAUDE_CODE_ENABLE_TODO_TOOLS).toBeUndefined();
+    expect(settings.env?.CLAUDE_CODE_AUTO_MODE_SERVER).toBeUndefined();
     expect(settings.env?.ANTHROPIC_BASE_URL).toBeUndefined();
     expect(settings.env?.KEEP).toBe("me");
   });

@@ -4,6 +4,7 @@ import { adjustMaxTokens } from "../formats/maxTokens.js";
 import { encodeDataUri } from "../concerns/image.js";
 import { ROLE, OPENAI_BLOCK, CLAUDE_BLOCK, EMPTY_TOOL_RESULT } from "../schema/index.js";
 import { collapseTextParts } from "../concerns/message.js";
+import { detectClassifierStopSequence, withoutClassifierStop } from "../concerns/classifier.js";
 
 function stripAnthropicBillingHeader(text) {
   if (typeof text !== "string") return "";
@@ -26,6 +27,25 @@ export function claudeToOpenAIRequest(model, body, stream) {
   // Temperature
   if (body.temperature !== undefined) {
     result.temperature = body.temperature;
+  }
+
+  // Sampling. Only top_p: `top_k` has no OpenAI equivalent, and strict
+  // OpenAI-dialect upstreams reject unknown body fields with a 400.
+  if (body.top_p !== undefined) result.top_p = body.top_p;
+
+  // stop_sequences → stop. The wires name the same thing, so an ordinary
+  // caller's terminators carry over unchanged.
+  //
+  // One exception: Claude Code's auto-mode classifier asks for a structural
+  // verdict (<severity>N</severity> / <block>yes</block>) and also sends the
+  // closing tag as its own stop hint. OpenAI-dialect `stop` implementations
+  // trim the matched text, leaving "<severity>0" — a verdict the client cannot
+  // parse, so auto mode fails closed. Drop only that owned hint; the model then
+  // finishes the tag it was asked for.
+  const classifierStop = detectClassifierStopSequence(body);
+  const forwardedStop = withoutClassifierStop(body.stop_sequences, classifierStop);
+  if (Array.isArray(forwardedStop) && forwardedStop.length > 0) {
+    result.stop = forwardedStop;
   }
 
   // System message

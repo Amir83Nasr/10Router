@@ -191,6 +191,15 @@ export async function POST(request) {
     const todoToolsKey = CLI_TOOLS.claude.envVars.todoTools;
     if (todoToolsKey) newSettings.env[todoToolsKey] = "1";
 
+    // CLAUDE_CODE_AUTO_MODE_SERVER=0 — auto mode asks the Anthropic API to
+    // review actions in-band (`safeguards` + the dangerous-tool-use beta). Behind
+    // this gateway that request never gets reviewed, so Claude Code spends one
+    // dead round-trip per session, shows the classifier billing notice, and then
+    // uses its own classifier regardless. Saying so up front keeps auto mode the
+    // same on every launch and keeps the notice out of the session.
+    const autoModeServerKey = CLI_TOOLS.claude.envVars.autoModeServer;
+    if (autoModeServerKey) newSettings.env[autoModeServerKey] = "0";
+
     // Write new settings
     await fs.writeFile(settingsPath, JSON.stringify(newSettings, null, 2));
 
@@ -219,6 +228,7 @@ const RESET_ENV_KEYS = [
   "API_TIMEOUT_MS",
   "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
   "CLAUDE_CODE_ENABLE_TODO_TOOLS",
+  "CLAUDE_CODE_AUTO_MODE_SERVER",
 ];
 
 // DELETE - Reset settings (remove env fields)

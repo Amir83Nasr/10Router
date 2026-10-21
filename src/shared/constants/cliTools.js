@@ -19,6 +19,14 @@ export const CLI_TOOLS = {
       // as `oc/...` or a combo name never match, so the task list disappears.
       // This flag is the CLI's documented escape hatch for that gate.
       todoTools: "CLAUDE_CODE_ENABLE_TODO_TOOLS",
+      // Auto mode's server-side classifier review asks the Anthropic API to
+      // review actions as part of the session's own requests (`safeguards` body
+      // field + `dangerous-tool-use` beta). A gateway cannot provide that review,
+      // so Claude Code prints the "this session isn't eligible" billing notice on
+      // the first checked action and falls back to its own classifier anyway.
+      // Declaring the gateway up front skips the notice: auto mode uses the local
+      // classifier for every session, with no dead round-trip first.
+      autoModeServer: "CLAUDE_CODE_AUTO_MODE_SERVER",
     },
     modelAliases: ["default", "sonnet", "opus", "fable", "haiku", "opusplan"],
     settingsFile: "~/.claude/settings.json",

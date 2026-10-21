@@ -14,6 +14,11 @@ export const CLI_TOOLS = {
       sonnetModel: "ANTHROPIC_DEFAULT_SONNET_MODEL",
       fableModel: "ANTHROPIC_DEFAULT_FABLE_MODEL",
       haikuModel: "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+      // Claude Code only exposes TodoWrite/TodoRead when the model id is one of
+      // Anthropic's own (an internal allowlist in the CLI); routed models such
+      // as `oc/...` or a combo name never match, so the task list disappears.
+      // This flag is the CLI's documented escape hatch for that gate.
+      todoTools: "CLAUDE_CODE_ENABLE_TODO_TOOLS",
     },
     modelAliases: ["default", "sonnet", "opus", "fable", "haiku", "opusplan"],
     settingsFile: "~/.claude/settings.json",

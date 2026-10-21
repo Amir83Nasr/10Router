@@ -245,6 +245,11 @@ export default function ClaudeToolCard({
       if (autoCompactWindow) {
         env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = autoCompactWindow;
       }
+      if (tool.envVars?.todoTools) {
+        // Claude Code hides TodoWrite behind an Anthropic-model allowlist; routed
+        // model ids never match, so the escape-hatch flag must ride along.
+        env[tool.envVars.todoTools] = "1";
+      }
       const res = await fetch("/api/cli-tools/claude-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -320,6 +325,11 @@ export default function ClaudeToolCard({
     });
     if (autoCompactWindow) {
       env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = autoCompactWindow;
+    }
+    if (tool.envVars?.todoTools) {
+      // Claude Code hides TodoWrite behind an Anthropic-model allowlist; routed
+      // model ids never match, so the escape-hatch flag must ride along.
+      env[tool.envVars.todoTools] = "1";
     }
 
     return [

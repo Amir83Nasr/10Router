@@ -7,6 +7,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { DEFAULT_PLUGINS } from "@/shared/constants/coworkPlugins";
+import { CLI_TOOLS } from "@/shared/constants/cliTools.js";
 import { isContainer, hostHome, hasHostHome } from "@/lib/isContainer";
 
 const execAsync = promisify(exec);
@@ -182,6 +183,14 @@ export async function POST(request) {
       delete newSettings.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW;
     }
 
+    // CLAUDE_CODE_ENABLE_TODO_TOOLS — Claude Code only offers TodoWrite/TodoRead
+    // when the model id is one of Anthropic's own (internal allowlist). Every
+    // model routed through this gateway is a custom id, so without the flag the
+    // task list never appears and Claude plans without visible progress. Set it
+    // alongside the routed model rather than leaving it to the user.
+    const todoToolsKey = CLI_TOOLS.claude.envVars.todoTools;
+    if (todoToolsKey) newSettings.env[todoToolsKey] = "1";
+
     // Write new settings
     await fs.writeFile(settingsPath, JSON.stringify(newSettings, null, 2));
 
@@ -209,6 +218,7 @@ const RESET_ENV_KEYS = [
   "ANTHROPIC_DEFAULT_HAIKU_MODEL",
   "API_TIMEOUT_MS",
   "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+  "CLAUDE_CODE_ENABLE_TODO_TOOLS",
 ];
 
 // DELETE - Reset settings (remove env fields)

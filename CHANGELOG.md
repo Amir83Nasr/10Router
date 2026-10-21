@@ -2,6 +2,17 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.15] — 2026-10-21
+
+- Fix: a non-streaming `/v1/messages` request routed to a provider that only streams came back as an OpenAI `chat.completion` body when the upstream spoke Anthropic on the wire. Claude Code reads `message.content[]` and threw, which auto mode reported as "classifier unavailable". Both the forced-stream and the non-streaming paths now aggregate Claude-dialect SSE with `parseClaudeSSEToMessage` (`open-sse/handlers/chatCore/claudeMessageBody.js`); the chat parser stays for chat-native upstreams and each path falls back to the other when no Anthropic event was seen.
+- Fix: an Anthropic Messages request that omits `stream` defaults to a JSON body, but the gateway used to answer SSE. The client preference is now resolved during stream negotiation, so a Claude client keeps JSON even when the provider forces streaming upstream; an explicit `Accept: text/event-stream` still opts into SSE.
+- Fix: auto mode could not read the classifier verdict it asked for. Claude Code also sends `</severity>` as a stop hint, and an OpenAI-dialect `stop` trims the matched text, leaving an unparseable `<severity>0`. The classifier's own closing tag is dropped from `stop_sequences`; ordinary terminators are forwarded unchanged.
+- Fix: `reasoning_effort: "auto"` reached upstreams from the `openai`, `zai`, `step` and `commandcode` wires, where it is not a declared enum member. Adaptive thinking with no explicit effort now omits the field and takes the provider default — most visibly on the zai path, whose fallback branch promoted "let the model decide" to `max`.
+- Fix: a model that cannot reason dropped the client's effort selection silently, so a fallback combo made an ignored selection look like a provider quirk. The drop is now reported once per request as a `THINKING` warning; the request itself is unchanged.
+- Fix: `top_p`, `stop` and `stop_sequences` round-trip between Claude and OpenAI bodies, and a `response.failed` event from a Responses upstream is a 502 instead of an empty success.
+- The Claude settings route and card also write `CLAUDE_CODE_AUTO_MODE_SERVER=0` (the new `CLI_TOOLS.claude.envVars.autoModeServer` constant, reset with the other gateway keys): auto mode's server-side classifier review is an Anthropic API call a gateway cannot serve, so declaring it skips the dead round-trip and the billing notice while the local classifier still runs.
+- Tests: `tests/unit/mode-wire-diff.test.js`, `opencode-combo-reasoning-contract.test.js` (all five combo members against the OpenAI wire enum), `system-inject-once.test.js`, `effort-unsupported-observable.test.js`, `claude-message-body.test.js`, `claude-forced-stream-dispatch.test.js`, `claude-nonstream-response-shape.test.js` and `request-stop-sequences.test.js`.
+
 ## [0.1.14] — 2026-10-21
 
 - Fix: Claude Code never showed its task list when the model was routed through this gateway. The CLI only advertises `TodoWrite`/`TodoRead` when the model id is one of Anthropic's own (an internal allowlist), and every routed model is a custom id (`oc/...`, a combo name, …), so the todo tools silently disappeared. The Claude settings route now writes `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` alongside the gateway env, and the card's env preview shows the same flag. The key comes from the new `CLI_TOOLS.claude.envVars.todoTools` constant and is reset with the rest of the gateway env keys.

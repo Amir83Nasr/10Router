@@ -90,6 +90,8 @@ async function completeXaiManualCode(code, state) {
 
 // GET /api/oauth/[provider]/authorize - Generate auth URL
 // GET /api/oauth/[provider]/device-code - Request device code (for device_code flow)
+export const dynamic = "force-dynamic";
+
 export async function GET(request, { params }) {
   try {
     const { provider, action } = await params;

@@ -5,7 +5,7 @@
     "type": "git",
     "url": "git+https://github.com/Amir83Nasr/10Router.git"
   },
-  "packageManager": "pnpm@12.6.0",
+  "packageManager": "pnpm@12.15.0",
   "description": "10Router dashboard",
   "bin": {
     "10router": "bin/10router.mjs"

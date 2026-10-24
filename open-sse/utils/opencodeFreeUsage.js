@@ -54,6 +54,10 @@ export function parseFreeUsageError(response, bodyText) {
     const retryMs = parseRetryAfterMs(response.headers?.get?.("retry-after"));
     const resetsAtMs = retryMs ? Date.now() + retryMs : null;
     const hint = retryMs ? ` (retry after ${humanMs(retryMs)})` : "";
+    // Our own synthetic 429 (already carries the "(local backoff, …)" hint): don't relabel it "upstream".
+    if (/local backoff/i.test(str)) {
+      return { status: 429, message: `OpenCode free-tier quota exhausted: ${str}`, resetsAtMs };
+    }
     return {
       status: 429,
       message: `OpenCode free-tier quota exhausted upstream${hint}: ${str || "Rate limit exceeded"}`,

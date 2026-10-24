@@ -23,8 +23,8 @@ import {
   FREE_USAGE_BREAKER_DEFAULT_MS,
 } from "../utils/opencodeFreeUsage.js";
 
-// Single key: the free lane is one global upstream quota pool behind the
-// `noauth` virtual connection (Authorization: Bearer public for everyone).
+// Key prefix: the free lane sits behind the `noauth` virtual connection
+// (Authorization: Bearer public for everyone); suffixed per model in execute().
 const FREE_USAGE_BREAKER_KEY = "opencode-free";
 
 // OpenCode v2 UA shape: opencode/<channel>/<version>/<client>. Upstream rejects
@@ -420,7 +420,9 @@ export class OpenCodeExecutor extends BaseExecutor {
     // shared fallback/error pipeline behaves identically. In-memory only —
     // noauth has no DB row to cool down, and a 9h upstream retry-after must
     // never lock a user out locally when the pool recovers in seconds.
-    const remaining = freeUsageRemainingMs(FREE_USAGE_BREAKER_KEY);
+    // Per model: one rate-limited model must not lock out the others.
+    const key = `${FREE_USAGE_BREAKER_KEY}:${baseModelId(args?.model)}`;
+    const remaining = freeUsageRemainingMs(key);
     if (remaining > 0) {
       return {
         response: syntheticFreeUsageResponse(remaining),
@@ -433,9 +435,8 @@ export class OpenCodeExecutor extends BaseExecutor {
       ...args,
       credentials: this.prepareRequestCredentials(args),
     });
-    if (result?.response?.status === 429)
-      recordFreeUsage(FREE_USAGE_BREAKER_KEY, FREE_USAGE_BREAKER_DEFAULT_MS);
-    else if (result?.response?.ok) freeUsageClearMs(FREE_USAGE_BREAKER_KEY);
+    if (result?.response?.status === 429) recordFreeUsage(key, FREE_USAGE_BREAKER_DEFAULT_MS);
+    else if (result?.response?.ok) freeUsageClearMs(key);
     return result;
   }
 

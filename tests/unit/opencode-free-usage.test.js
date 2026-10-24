@@ -78,6 +78,22 @@ describe("opencode free-lane 429 root fix", () => {
     expect(second.response.status).toBe(429);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(second.response.headers.get("retry-after")).toBeTruthy();
+
+    // Local synthetic 429 must not be relabelled "upstream"
+    const parsed = executor.parseError(second.response, await second.response.clone().text());
+    expect(parsed.message).toMatch(/local backoff/);
+    expect(parsed.message).not.toMatch(/upstream/);
+
+    // Backoff is per model: another model still reaches upstream
+    fetchMock.mockResolvedValueOnce(okResponse());
+    const other = await executor.execute({
+      model: "other-model",
+      body: BODY,
+      stream: true,
+      credentials: CREDS,
+    });
+    expect(other.response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("lifts the local backoff on the next upstream 200", async () => {

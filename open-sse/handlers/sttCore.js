@@ -159,21 +159,6 @@ async function transcribeGemini(cfg, file, model, token, formData) {
 }
 
 // HuggingFace: POST raw binary to {baseUrl}/{model_id}
-async function transcribeHuggingFace(cfg, file, model, token) {
-  if (model.includes("..") || model.includes("//"))
-    return createErrorResult(400, "Invalid model ID");
-  const url = `${cfg.baseUrl.replace(/\/+$/, "")}/${model}`;
-  const buf = await file.arrayBuffer();
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { ...buildAuthHeaders(cfg, token), "Content-Type": resolveAudioContentType(file) },
-    body: buf,
-  });
-  if (!res.ok) return upstreamError(res);
-  const data = await res.json();
-  return jsonResponse({ text: data.text || "" });
-}
-
 // Default: OpenAI/Groq/Whisper-compatible multipart
 async function transcribeOpenAICompatible(cfg, file, model, token, formData) {
   const fd = new FormData();
@@ -249,8 +234,6 @@ export async function handleSttCore({ provider, model, formData, credentials, st
         return await transcribeAssemblyAI(cfg, file, model, token);
       case "nvidia-asr":
         return await transcribeNvidia(cfg, file, model, token);
-      case "huggingface-asr":
-        return await transcribeHuggingFace(cfg, file, model, token);
       case "gemini-stt":
         return await transcribeGemini(cfg, file, model, token, formData);
       default:

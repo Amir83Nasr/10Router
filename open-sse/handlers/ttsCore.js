@@ -74,7 +74,7 @@ export async function handleTtsCore({
       return createTtsResponse(result.base64, result.format, responseFormat);
     }
 
-    // Generic config-driven (hyperbolic, deepgram, nvidia, huggingface, inworld, cartesia, playht, coqui, tortoise, qwen, ...)
+    // Generic config-driven (hyperbolic, deepgram, nvidia, inworld, cartesia, playht, coqui, tortoise, qwen, ...)
     const result = await synthesizeViaConfig(provider, input.trim(), model, credentials);
     if (result) return createTtsResponse(result.base64, result.format, responseFormat);
 

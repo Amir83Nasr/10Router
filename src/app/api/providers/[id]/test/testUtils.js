@@ -6,6 +6,7 @@ import {
   isAnthropicCompatibleProvider,
 } from "@/shared/constants/providers";
 import { getDefaultModel } from "open-sse/config/providerModels.js";
+import { buildOpenCodeGoProbes } from "open-sse/services/opencodeGoProbe.js";
 import { resolveOllamaLocalHost, PROVIDERS } from "open-sse/config/providers.js";
 import { CODEX_CLI_VERSION } from "open-sse/config/appConstants.js";
 import {
@@ -516,14 +517,6 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         );
         return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
       }
-      case "vercel-ai-gateway": {
-        const res = await fetchWithConnectionProxy(
-          "https://ai-gateway.vercel.sh/v1/models",
-          { headers: { Authorization: `Bearer ${connection.apiKey}` } },
-          effectiveProxy,
-        );
-        return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
-      }
       case "anthropic": {
         const res = await fetchWithConnectionProxy(
           "https://api.anthropic.com/v1/messages",
@@ -573,52 +566,6 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
             },
             body: JSON.stringify({
               model: "glm-4.7",
-              max_tokens: 1,
-              messages: [{ role: "user", content: "test" }],
-            }),
-          },
-          effectiveProxy,
-        );
-        const valid = res.status !== 401 && res.status !== 403;
-        return { valid, error: valid ? null : "Invalid API key" };
-      }
-      case "glm-cn": {
-        const res = await fetchWithConnectionProxy(
-          "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${connection.apiKey}`,
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "glm-4.7",
-              max_tokens: 1,
-              messages: [{ role: "user", content: "test" }],
-            }),
-          },
-          effectiveProxy,
-        );
-        const valid = res.status !== 401 && res.status !== 403;
-        return { valid, error: valid ? null : "Invalid API key" };
-      }
-      case "minimax":
-      case "minimax-cn": {
-        const endpoints = {
-          minimax: "https://api.minimax.io/anthropic/v1/messages",
-          "minimax-cn": "https://api.minimaxi.com/anthropic/v1/messages",
-        };
-        const res = await fetchWithConnectionProxy(
-          endpoints[connection.provider],
-          {
-            method: "POST",
-            headers: {
-              "x-api-key": connection.apiKey,
-              "anthropic-version": "2023-06-01",
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "minimax-m2",
               max_tokens: 1,
               messages: [{ role: "user", content: "test" }],
             }),
@@ -681,14 +628,6 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
       case "deepseek": {
         const res = await fetchWithConnectionProxy(
           "https://api.deepseek.com/models",
-          { headers: { Authorization: `Bearer ${connection.apiKey}` } },
-          effectiveProxy,
-        );
-        return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
-      }
-      case "groq": {
-        const res = await fetchWithConnectionProxy(
-          "https://api.groq.com/openai/v1/models",
           { headers: { Authorization: `Bearer ${connection.apiKey}` } },
           effectiveProxy,
         );
@@ -761,14 +700,6 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
       case "nebius": {
         const res = await fetchWithConnectionProxy(
           "https://api.studio.nebius.ai/v1/models",
-          { headers: { Authorization: `Bearer ${connection.apiKey}` } },
-          effectiveProxy,
-        );
-        return { valid: res.ok, error: res.ok ? null : "Invalid API key" };
-      }
-      case "siliconflow": {
-        const res = await fetchWithConnectionProxy(
-          "https://api.siliconflow.com/v1/models",
           { headers: { Authorization: `Bearer ${connection.apiKey}` } },
           effectiveProxy,
         );
@@ -907,31 +838,21 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
         return { valid: true, error: null };
       }
       case "opencode-go": {
-        const res = await fetchWithConnectionProxy(
-          "https://opencode.ai/inference/go/openai/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${connection.apiKey}`,
-            },
-            body: JSON.stringify({
-              model: getDefaultModel("opencode-go"),
-              messages: [{ role: "user", content: "ping" }],
-              max_tokens: 1,
-              stream: false,
-            }),
-          },
-          effectiveProxy,
+        const results = await Promise.all(
+          buildOpenCodeGoProbes(connection.apiKey).map((probe) =>
+            fetchWithConnectionProxy(
+              probe.url,
+              { method: "POST", headers: probe.headers, body: probe.body },
+              effectiveProxy,
+            ),
+          ),
         );
-        const valid = res.status !== 401 && res.status !== 403;
+        const valid = results.every((res) => res.status !== 401 && res.status !== 403);
         return { valid, error: valid ? null : "Invalid API key" };
       }
-      case "xiaomi-mimo":
-      case "xiaomi-tokenplan": {
+      case "xiaomi-mimo": {
         const baseUrls = {
           "xiaomi-mimo": "https://api.xiaomimimo.com/v1",
-          "xiaomi-tokenplan": "https://token-plan-sgp.xiaomimimo.com/v1",
         };
         const res = await fetchWithConnectionProxy(
           `${baseUrls[connection.provider]}/models`,

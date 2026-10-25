@@ -10,7 +10,7 @@ Provider-agnostic SSE engine: one OpenAI-style request → any provider (chat, i
 
 - `config/` — ALL constants (no hardcode elsewhere). `providers.js` + `registry/` (provider defs), `providerModels.js` (alias→models matrix), `runtimeConfig.js` (timeouts, token limits), per-area files (`grokCli.js`, `mediaConfig.js`, `ttsModels.js`, `ollamaModels.js`…).
 - `translator/` — format conversion. `request/` (7 files) + `response/` (6 files), `schema/` (roles, blocks, finishReasons), `concerns/` (thinking, toolCall, modality, prefetch…), `formats/` (openai, claude, gemini, responsesApi, maxTokens). `index.js` is the registry/entry.
-- `executors/` — per-provider upstream call. `base.js` (BaseExecutor) + specialized: `antigravity`, `codex`, `cursor`, `opencode` (+`go`, +`zen`), `xiaomi-mimo`, `xiaomi-tokenplan`, `zed`. Everything else falls back to `default.js` (OpenAI-compatible).
+- `executors/` — per-provider upstream call. `base.js` (BaseExecutor) + specialized: `antigravity`, `codex`, `cursor`, `opencode` (+`go`, +`zen`), `xiaomi-mimo`, `zed`. Everything else falls back to `default.js` (OpenAI-compatible).
 - `providers/` — registry build + `capabilities.js` + `pricing.js` + `thinkingLevels.js` + `visionPatterns.js` + `models/`. Entry: `index.js` (PROVIDERS).
 - `handlers/` — per-modality cores (`chatCore`, `imageGenerationCore`, `embeddingsCore`, `ttsCore`, `sttCore`, `videoCore`, `responsesHandler`, `systemoneCore`) + per-provider subfolders. `chatCore/` splits streaming / non-streaming / sse-to-json / requestDetail.
 - `rtk/` — token savers, all **fail-open**. `index.js` (`tool_result` compress), `headroom.js` (external proxy), `pxpipe.js`, `caveman.js` + `ponytail.js` (system inject), `filters/` + `registry.js` + `applyFilter.js`.

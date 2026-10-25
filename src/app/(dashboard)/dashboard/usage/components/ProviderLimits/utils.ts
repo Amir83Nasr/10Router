@@ -524,24 +524,6 @@ export function parseQuotaData(provider: any, data: any) {
         }
         break;
 
-      case "vercel-ai-gateway":
-        // Vercel returns currency credit balance, not request quotas.
-        // The 'Remaining (USD)' row needs explicit remainingPercentage because
-        // its used/total values would otherwise compute the wrong direction
-        // (e.g. used=95.5 / total=100 → 4% instead of 96%).
-        if (data.quotas) {
-          Object.entries(data.quotas).forEach(([name, quota]: [string, any]) => {
-            normalizedQuotas.push({
-              name,
-              used: quota.used || 0,
-              total: quota.total || 0,
-              resetAt: quota.resetAt || null,
-              remainingPercentage: quota.remainingPercentage,
-            });
-          });
-        }
-        break;
-
       case "codebuddy-cn":
         // CodeBuddy CN mixes recurring refill packs ("Monthly"/"Weekly"/...)
         // with one-shot bonus packs ("Bonus Pack N"). Forward `recurring`
@@ -591,21 +573,6 @@ export function parseQuotaData(provider: any, data: any) {
               currency:
                 quota.currency ||
                 (name.includes("(") ? name.slice(name.indexOf("(") + 1, name.indexOf(")")) : "USD"),
-            });
-          });
-        }
-        break;
-
-      case "groq":
-        // Requests/Tokens rate-limit windows from response headers — absolute
-        // used/total (calculatePercentage derives the bar), like Codex.
-        if (data.quotas) {
-          Object.entries(data.quotas).forEach(([name, quota]: [string, any]) => {
-            normalizedQuotas.push({
-              name,
-              used: quota.used || 0,
-              total: quota.total || 0,
-              resetAt: quota.resetAt || null,
             });
           });
         }

@@ -2,7 +2,7 @@
  * Unit tests for image generation handler
  *
  * Covers:
- *  - OpenAI-compatible format (openai, minimax, openrouter)
+ *  - OpenAI-compatible format (openai, openrouter)
  *  - Gemini format (generateContent API)
  *  - Provider-specific formats (nanobanana, sdwebui)
  *  - Response normalization to OpenAI format
@@ -123,36 +123,6 @@ describe("handleImageGenerationCore", () => {
     expect(responseBody.data[0].b64_json).toBe("base64imagedata");
   });
 
-  it("generates image with Minimax format", async () => {
-    global.fetch.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          created: 1234567890,
-          data: [{ url: "https://example.com/minimax.png" }],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
-
-    const result = await handleImageGenerationCore({
-      body: { prompt: "A mountain", size: "1024x1024" },
-      modelInfo: { provider: "minimax", model: "minimax-image-01" },
-      credentials: { apiKey: "test-key" },
-      log: null,
-    });
-
-    expect(result.success).toBe(true);
-    expect(global.fetch).toHaveBeenCalledWith(
-      "https://api.minimaxi.com/v1/images/generations",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({
-          Authorization: "Bearer test-key",
-        }),
-      }),
-    );
-  });
-
   it("generates image with NanoBanana format", async () => {
     vi.useFakeTimers();
     global.fetch
@@ -258,59 +228,6 @@ describe("handleImageGenerationCore", () => {
         }),
       }),
     );
-  });
-
-  it("handles Vercel AI Gateway image generation as OpenAI-compatible", async () => {
-    global.fetch.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          created: 1234567890,
-          data: [{ url: "https://example.com/vercel-image.png" }],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
-
-    const result = await handleImageGenerationCore({
-      body: { prompt: "A watercolor castle", n: 1, size: "1024x1024" },
-      modelInfo: { provider: "vercel-ai-gateway", model: "openai/gpt-image-1" },
-      credentials: { apiKey: "vag-test-key" },
-      log: null,
-    });
-
-    expect(result.success).toBe(true);
-    expect(global.fetch).toHaveBeenCalledWith(
-      "https://ai-gateway.vercel.sh/v1/images/generations",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({
-          "Content-Type": "application/json",
-          Authorization: "Bearer vag-test-key",
-        }),
-        body: expect.stringContaining('"model":"openai/gpt-image-1"'),
-      }),
-    );
-  });
-
-  it("handles HuggingFace binary response", async () => {
-    const imageBuffer = new Uint8Array([0x89, 0x50, 0x4e, 0x47]); // PNG header
-    global.fetch.mockResolvedValueOnce(
-      new Response(imageBuffer, {
-        status: 200,
-        headers: { "Content-Type": "image/png" },
-      }),
-    );
-
-    const result = await handleImageGenerationCore({
-      body: { prompt: "A tree" },
-      modelInfo: { provider: "huggingface", model: "black-forest-labs/FLUX.1-schnell" },
-      credentials: { apiKey: "test-key" },
-      log: null,
-    });
-
-    expect(result.success).toBe(true);
-    const responseBody = await result.response.json();
-    expect(responseBody.data[0].b64_json).toBeTruthy();
   });
 
   it.each(["gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])(

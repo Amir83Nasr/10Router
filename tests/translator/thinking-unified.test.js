@@ -181,16 +181,16 @@ describe("applyThinking per provider format", () => {
     ["medium", "high"],
     ["minimal", "low"],
   ])("GLM-5.3 %s → reasoning_effort=%s (low|high|max only, per z.ai docs)", (input, expected) => {
-    const out = apply("openai", "glm-5.3", { reasoning_effort: input }, "glm-cn");
+    const out = apply("openai", "glm-5.3", { reasoning_effort: input }, "glm");
     expect(out.thinking).toEqual({ type: "enabled" });
     expect(out.reasoning_effort).toBe(expected);
   });
   it("GLM-5.2 also gets reasoning_effort (supported from 5.2 onward)", () => {
-    const out = apply("openai", "glm-5.2", { reasoning_effort: "low" }, "glm-cn");
+    const out = apply("openai", "glm-5.2", { reasoning_effort: "low" }, "glm");
     expect(out.reasoning_effort).toBe("low");
   });
   it("GLM-4.7 (pre-5.2) does not get reasoning_effort — z.ai ignores it", () => {
-    const out = apply("openai", "glm-4.7", { reasoning_effort: "low" }, "glm-cn");
+    const out = apply("openai", "glm-4.7", { reasoning_effort: "low" }, "glm");
     expect(out.thinking).toEqual({ type: "enabled" });
     expect(out.reasoning_effort).toBeUndefined();
   });
@@ -223,15 +223,15 @@ describe("applyThinking per provider format", () => {
     expect(xhigh.reasoning_effort).toBe("max");
   });
   it("MiniMax M3 → adaptive", () => {
-    const out = apply("claude", "MiniMax-M3", { reasoning_effort: "high" }, "minimax");
+    const out = apply("claude", "MiniMax-M3", { reasoning_effort: "high" }, "openrouter");
     expect(out.thinking).toEqual({ type: "adaptive" });
   });
   it("non-reasoning model → strips thinking", () => {
     const out = apply("openai", "gpt-4o", { reasoning_effort: "high" }, "openai");
     expect(out.reasoning_effort).toBeUndefined();
   });
-  it("aggregator (siliconflow) GLM model → forced openai reasoning_effort", () => {
-    const out = apply("openai", "zai-org/GLM-5", { reasoning_effort: "high" }, "siliconflow");
+  it("aggregator (openrouter) GLM model → forced openai reasoning_effort", () => {
+    const out = apply("openai", "zai-org/GLM-5", { reasoning_effort: "high" }, "openrouter");
     expect(out.reasoning_effort).toBe("high");
     expect(out.enable_thinking).toBeUndefined();
   });

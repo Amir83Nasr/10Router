@@ -1,7 +1,6 @@
 // Generic config-driven TTS handlers — dispatched by ttsConfig.format.
 // Each handler accepts { baseUrl, apiKey, text, modelId, voiceId } and returns { base64, format }.
 import { responseToBase64, throwUpstreamError } from "./_base.js";
-import minimaxTts from "./minimax.js";
 
 // Hyperbolic: POST { text } → { audio: base64 }
 async function hyperbolic({ baseUrl, apiKey, text }) {
@@ -37,37 +36,6 @@ async function nvidia({ baseUrl, apiKey, text, modelId, voiceId }) {
   });
   if (!res.ok) await throwUpstreamError(res);
   return responseToBase64(res, "wav");
-}
-
-// HuggingFace: POST {baseUrl}/{modelId} { inputs: text } → binary
-async function huggingface({ baseUrl, apiKey, text, modelId }) {
-  if (!modelId || modelId.includes("..")) throw new Error("Invalid HuggingFace model ID");
-  const res = await fetch(`${baseUrl}/${modelId}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ inputs: text }),
-  });
-  if (!res.ok) await throwUpstreamError(res);
-  return responseToBase64(res, "wav");
-}
-
-// Fish Audio: model travels in an HTTP header, the voice is a reference_id, returns binary
-async function fishAudio({ baseUrl, apiKey, text, modelId, voiceId }) {
-  const res = await fetch(baseUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      model: modelId || "s2.1-pro-free",
-    },
-    body: JSON.stringify({
-      text,
-      format: "mp3",
-      ...(voiceId ? { reference_id: voiceId } : {}),
-    }),
-  });
-  if (!res.ok) await throwUpstreamError(res);
-  return responseToBase64(res, "mp3");
 }
 
 // Inworld: Basic auth, JSON { audioContent }
@@ -179,13 +147,10 @@ export const FORMAT_HANDLERS = {
   hyperbolic,
   deepgram,
   "nvidia-tts": nvidia,
-  "huggingface-tts": huggingface,
   inworld,
   cartesia,
   playht,
   coqui,
   tortoise,
   openai: openaiCompat,
-  "minimax-tts": minimaxTts,
-  "fish-audio": fishAudio,
 };

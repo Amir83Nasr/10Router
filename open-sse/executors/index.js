@@ -5,7 +5,6 @@ import { OpenCodeExecutor } from "./opencode.js";
 import { OpenCodeGoExecutor } from "./opencode-go.js";
 import { OpenCodeZenExecutor } from "./opencode-zen.js";
 import { XiaomiMimoExecutor } from "./xiaomi-mimo.js";
-import { XiaomiTokenplanExecutor } from "./xiaomi-tokenplan.js";
 import { QoderExecutor } from "./qoder.js";
 import ZedExecutor from "./zed.js";
 import { DefaultExecutor } from "./default.js";
@@ -19,7 +18,6 @@ const executors = {
   "opencode-go": new OpenCodeGoExecutor(),
   "opencode-zen": new OpenCodeZenExecutor(),
   "xiaomi-mimo": new XiaomiMimoExecutor(),
-  "xiaomi-tokenplan": new XiaomiTokenplanExecutor(),
   qoder: new QoderExecutor(),
   zed: new ZedExecutor(),
 };
@@ -45,6 +43,5 @@ export { OpenCodeExecutor } from "./opencode.js";
 export { OpenCodeGoExecutor } from "./opencode-go.js";
 export { OpenCodeZenExecutor } from "./opencode-zen.js";
 export { XiaomiMimoExecutor } from "./xiaomi-mimo.js";
-export { XiaomiTokenplanExecutor } from "./xiaomi-tokenplan.js";
 export { QoderExecutor } from "./qoder.js";
 export { default as ZedExecutor } from "./zed.js";

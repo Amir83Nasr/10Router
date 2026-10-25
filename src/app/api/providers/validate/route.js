@@ -7,9 +7,9 @@ import {
   AI_PROVIDERS,
 } from "@/shared/constants/providers";
 import { getDefaultModel } from "open-sse/config/providerModels.js";
+import { buildOpenCodeGoProbes } from "open-sse/services/opencodeGoProbe.js";
 import {
   resolveOllamaLocalHost,
-  resolveXiaomiTokenplanBaseUrl,
   PROVIDERS,
 } from "open-sse/config/providers.js";
 import { resolveQoderCredentials, resolveQoderModels } from "open-sse/services/qoderModels.js";
@@ -300,13 +300,6 @@ export async function POST(request) {
           isValid = openaiRes.ok;
           break;
 
-        case "vercel-ai-gateway":
-          const vercelAiGatewayRes = await fetch("https://ai-gateway.vercel.sh/v1/models", {
-            headers: { Authorization: `Bearer ${apiKey}` },
-          });
-          isValid = vercelAiGatewayRes.ok;
-          break;
-
         case "anthropic":
           const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -339,9 +332,6 @@ export async function POST(request) {
           break;
 
         case "glm":
-        case "glm-cn":
-        case "minimax":
-        case "minimax-cn":
         case "alicode-intl":
         case "alims-intl":
         case "alicode":
@@ -349,7 +339,6 @@ export async function POST(request) {
           // Use baseUrl from PROVIDERS (DRY); separate openai-format vs claude-format flow
           const cfg = PROVIDERS[provider];
           const isOpenAiFormat =
-            provider === "glm-cn" ||
             provider === "alicode" ||
             provider === "alicode-intl" ||
             provider === "alims-intl";
@@ -406,7 +395,6 @@ export async function POST(request) {
         }
 
         case "deepseek":
-        case "groq":
         case "xai":
         case "mistral":
         case "perplexity":
@@ -415,7 +403,6 @@ export async function POST(request) {
         case "cerebras":
         case "cohere":
         case "nebius":
-        case "siliconflow":
         case "hyperbolic":
         case "ollama":
         case "ollama-local":
@@ -423,7 +410,6 @@ export async function POST(request) {
         case "nanobanana":
         case "chutes":
         case "xiaomi-mimo":
-        case "xiaomi-tokenplan":
         case "nvidia": {
           const endpoints = {
             ...Object.fromEntries(
@@ -433,7 +419,6 @@ export async function POST(request) {
             ),
             // dynamic URLs (depend on providerSpecificData) — kept inline
             "ollama-local": `${resolveOllamaLocalHost({ providerSpecificData })}/api/tags`,
-            "xiaomi-tokenplan": `${resolveXiaomiTokenplanBaseUrl({ providerSpecificData })}/models`,
           };
           const headers = {};
           if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
@@ -444,9 +429,6 @@ export async function POST(request) {
           // xai returns 400 for bad key, 403 for valid-but-no-credit. Other providers use 401.
           if (provider === "xai") {
             isValid = res.status === 200 || res.status === 403;
-          } else if (provider === "xiaomi-tokenplan") {
-            // /models returns 403 for valid keys lacking list permission; only 401 means invalid
-            isValid = res.status !== 401;
           } else {
             isValid = res.ok;
           }
@@ -454,17 +436,12 @@ export async function POST(request) {
         }
 
         case "opencode-go": {
-          const res = await fetch("https://opencode.ai/inference/go/openai/v1/chat/completions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: getDefaultModel("opencode-go"),
-              messages: [{ role: "user", content: "ping" }],
-              max_tokens: 1,
-              stream: false,
-            }),
-          });
-          isValid = res.status !== 401 && res.status !== 403;
+          const results = await Promise.all(
+            buildOpenCodeGoProbes(apiKey).map((probe) =>
+              fetch(probe.url, { method: "POST", headers: probe.headers, body: probe.body }),
+            ),
+          );
+          isValid = results.every((res) => res.status !== 401 && res.status !== 403);
           break;
         }
 

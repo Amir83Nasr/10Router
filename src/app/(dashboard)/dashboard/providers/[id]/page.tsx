@@ -51,6 +51,7 @@ import { ArrowLeftRight, Server, Unplug } from "lucide-react";
 import PassthroughModelsSection from "./PassthroughModelsSection";
 import CompatibleModelsSection from "./CompatibleModelsSection";
 import ConnectionRow from "./ConnectionRow";
+import OpenCodeGoConnectionCard from "./OpenCodeGoConnectionCard";
 import AddApiKeyModal from "./AddApiKeyModal";
 import EditCompatibleNodeModal from "./EditCompatibleNodeModal";
 import AddCustomModelModal from "./AddCustomModelModal";
@@ -1434,6 +1435,14 @@ export default function ProviderDetailPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {providerId === "opencode-go" && (
+          <OpenCodeGoConnectionCard
+            connectionCount={connections.length}
+            activeCount={connections.filter((conn) => conn.isActive !== false).length}
+            onAddConnection={triggerAddConnection}
+          />
         )}
 
         {/* Connections */}

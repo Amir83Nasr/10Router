@@ -69,9 +69,7 @@ const SAMPLE_GLM_TOKENS_USAGE = {
 describe("glm registry usage flags", () => {
   it("is listed for apikey quota dashboard", () => {
     expect(USAGE_SUPPORTED_PROVIDERS).toContain("glm");
-    expect(USAGE_SUPPORTED_PROVIDERS).toContain("glm-cn");
     expect(USAGE_APIKEY_PROVIDERS).toContain("glm");
-    expect(USAGE_APIKEY_PROVIDERS).toContain("glm-cn");
   });
 });
 
@@ -112,8 +110,8 @@ describe("getGlmUsage and getUsageForProvider(glm)", () => {
     proxyAwareFetch.mockResolvedValueOnce(jsonResponse(SAMPLE_GLM_TOKENS_USAGE));
 
     const usage = await getUsageForProvider({
-      provider: "glm-cn",
-      apiKey: "glm-cn-key",
+      provider: "glm",
+      apiKey: "glm-key",
     });
 
     expect(usage.message).toBeUndefined();
@@ -147,7 +145,7 @@ describe("getGlmUsage and getUsageForProvider(glm)", () => {
       }),
     );
 
-    const usage = await getGlmUsage("glm-key", "glm");
+    const usage = await getGlmUsage("glm-key");
     expect(usage.plan).toBe("Pro");
     expect(usage.quotas["Limit (12)"]).toEqual({
       used: 5,

@@ -32,8 +32,8 @@ describe("provider test-models route kind routing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getProviderConnectionById.mockResolvedValue({
-      id: "conn-hf",
-      provider: "huggingface",
+      id: "conn-openai",
+      provider: "openai",
     });
     mocks.getApiKeys.mockResolvedValue([{ key: "sk-internal", isActive: true }]);
     mocks.getConsistentMachineId.mockResolvedValue("cli-token");
@@ -70,21 +70,19 @@ describe("provider test-models route kind routing", () => {
     global.fetch = originalFetch;
   });
 
-  it("routes huggingface image models to /api/v1/images/generations", async () => {
+  it("routes image-kind models to /api/v1/images/generations", async () => {
     const { POST } = await import("../../src/app/api/providers/[id]/test-models/route.js");
 
-    const req = new Request("http://localhost/api/providers/conn-hf/test-models", {
+    const req = new Request("http://localhost/api/providers/conn-openai/test-models", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
 
-    const res = await POST(req, { params: Promise.resolve({ id: "conn-hf" }) });
+    const res = await POST(req, { params: Promise.resolve({ id: "conn-openai" }) });
     const body = await res.json();
 
-    expect(body.provider).toBe("huggingface");
-    expect(body.results.some((r) => r.modelId === "black-forest-labs/FLUX.1-schnell" && r.ok)).toBe(
-      true,
-    );
+    expect(body.provider).toBe("openai");
+    expect(body.results.some((r) => r.modelId === "gpt-image-1" && r.ok)).toBe(true);
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining("/api/v1/images/generations"),
       expect.objectContaining({

@@ -347,33 +347,6 @@ function buildSearxngRequest(config, params) {
   };
 }
 
-function buildXquikRequest(config, params) {
-  const apiKey = params.token;
-  if (!apiKey) throw new Error("Xquik requires an API key");
-
-  const queryType = getProviderSetting(params, "queryType");
-  if (queryType && !["Latest", "Top"].includes(queryType)) {
-    throw new Error("Xquik queryType must be Latest or Top");
-  }
-
-  const qp = new URLSearchParams({
-    q: params.query,
-    limit: String(params.maxResults),
-  });
-  const cursor = getProviderSetting(params, "cursor");
-  if (cursor) qp.set("cursor", cursor);
-  if (queryType) qp.set("queryType", queryType);
-  if (params.language) qp.set("language", params.language);
-
-  return {
-    url: `${resolveBaseUrl(config, params)}?${qp}`,
-    init: {
-      method: "GET",
-      headers: { Accept: "application/json", "x-api-key": apiKey },
-    },
-  };
-}
-
 // ── Ollama Cloud web_search ──────────────────────────────────────────────
 // POST https://ollama.com/api/web_search { query, max_results }
 // Response: { results: [{ title, url, content, published_at? }] }
@@ -435,7 +408,6 @@ const BUILDERS = {
   searchapi: buildSearchApiRequest,
   youcom: buildYouComRequest,
   searxng: buildSearxngRequest,
-  xquik: buildXquikRequest,
   "ollama-search": buildOllamaSearchRequest,
   glm: buildGlmSearchRequest,
 };

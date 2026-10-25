@@ -31,7 +31,6 @@ const LIMIT_TOLERANCE = 0.1;
 // the local pattern table resolves; names that already match need no entry.
 export const PROVIDER_ALIASES = {
   glm: "zai",
-  "glm-cn": "zhipuai",
   claude: "anthropic",
   gemini: "google",
   qwen: "alibaba",
@@ -90,9 +89,8 @@ export function build(catalog, entries) {
   // Upstream provider id -> the local ids it belongs to, taken from the registry
   // snapshot so a gateway listed upstream under another name is still filed
   // under the name requests arrive with. One upstream name can back more than one
-  // local id (glm-cn and zhipu are both zhipuai) and each has to resolve; the
-  // snapshot only covers the built-in registry, so an upstream provider it does
-  // not mention keeps its own name.
+  // local id and each has to resolve; the snapshot only covers the built-in
+  // registry, so an upstream provider it does not mention keeps its own name.
   const localIds = new Map();
   for (const { provider } of entries) {
     const upstreamId = PROVIDER_ALIASES[provider] || provider;

@@ -224,7 +224,6 @@ const PROVIDER_MODELS_CONFIG = {
 
   // OpenAI-compatible API key providers
   deepseek: createOpenAIModelsConfig("https://api.deepseek.com/models"),
-  groq: createOpenAIModelsConfig("https://api.groq.com/openai/v1/models"),
   xai: createOpenAIModelsConfig("https://api.x.ai/v1/models"),
   mistral: createOpenAIModelsConfig("https://api.mistral.ai/v1/models"),
   perplexity: createOpenAIModelsConfig("https://api.perplexity.ai/v1/models"),
@@ -234,7 +233,6 @@ const PROVIDER_MODELS_CONFIG = {
   cerebras: createOpenAIModelsConfig("https://api.cerebras.ai/v1/models"),
   cohere: createOpenAIModelsConfig("https://api.cohere.ai/v1/models"),
   nebius: createOpenAIModelsConfig("https://api.studio.nebius.ai/v1/models"),
-  siliconflow: createOpenAIModelsConfig("https://api.siliconflow.com/v1/models"),
   hyperbolic: createOpenAIModelsConfig("https://api.hyperbolic.xyz/v1/models"),
   ollama: createOpenAIModelsConfig("https://ollama.com/api/tags"),
   // ollama-local: url resolved dynamically below via providerSpecificData.baseUrl
@@ -242,7 +240,6 @@ const PROVIDER_MODELS_CONFIG = {
   chutes: createOpenAIModelsConfig("https://llm.chutes.ai/v1/models"),
   nvidia: createOpenAIModelsConfig("https://integrate.api.nvidia.com/v1/models"),
   assemblyai: createOpenAIModelsConfig("https://api.assemblyai.com/v1/models"),
-  "vercel-ai-gateway": createOpenAIModelsConfig("https://ai-gateway.vercel.sh/v1/models"),
   kimchi: {
     customResolver: async (connection) => {
       const result = await resolveKimchiModels(

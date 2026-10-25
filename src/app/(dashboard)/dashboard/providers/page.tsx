@@ -245,6 +245,12 @@ export default function ProvidersPage() {
   // Free Tier cards may be oauth-only (e.g. kimchi) or dual-auth, so count via
   // dualAuthTypes per provider instead of a fixed "apikey" — otherwise oauth
   // connections are invisible here (mismatch with the detail page).
+  const apiKeyEntries = Object.entries(APIKEY_PROVIDERS)
+    .filter(
+      ([key, info]) =>
+        !info.hidden && matchStatus(getProviderStats(key, dualAuthTypes(info, key)), info.noAuth),
+    )
+    .sort(([, a], [, b]) => (a.priority ?? 999) - (b.priority ?? 999));
   const freeTierEntries = Object.entries(FREE_TIER_PROVIDERS)
     .filter(
       ([key, info]) =>
@@ -285,6 +291,7 @@ export default function ProvidersPage() {
     oauthEntries.length > 0 ||
     freeEntries.length > 0 ||
     freeTierEntries.length > 0 ||
+    apiKeyEntries.length > 0 ||
     compatibleProviders.length > 0 ||
     anthropicCompatibleProviders.length > 0;
 
@@ -411,6 +418,30 @@ export default function ProvidersPage() {
                     stats={getProviderStats(key, freeAuthTypes)}
                     authType={
                       Array.isArray(freeAuthTypes) ? (freeAuthTypes[0] ?? "apikey") : freeAuthTypes
+                    }
+                  />
+                );
+              })}
+            </CardGrid>
+          </Section>
+        )}
+
+        {/* API Key Providers */}
+        {apiKeyEntries.length > 0 && (
+          <Section title="API Key Providers">
+            <CardGrid>
+              {apiKeyEntries.map(([key, info]) => {
+                const apiKeyAuthTypes = dualAuthTypes(info, key);
+                return (
+                  <ApiKeyProviderCard
+                    key={key}
+                    providerId={key}
+                    provider={info}
+                    stats={getProviderStats(key, apiKeyAuthTypes)}
+                    authType={
+                      Array.isArray(apiKeyAuthTypes)
+                        ? (apiKeyAuthTypes[0] ?? "apikey")
+                        : apiKeyAuthTypes
                     }
                   />
                 );

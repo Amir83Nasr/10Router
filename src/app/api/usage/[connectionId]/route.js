@@ -133,7 +133,7 @@ export async function GET(request, { params }) {
       return Response.json({ error: "Connection not found" }, { status: 404 });
     }
 
-    // Allow OAuth connections, plus whitelisted apikey providers (glm/minimax/...)
+    // Allow OAuth connections, plus whitelisted apikey providers (glm/...)
     const isOAuth = connection.authType === "oauth";
     const isApikeyAuth = connection.authType === "apikey" || connection.authType === "api_key";
     const isApikeyEligible = isApikeyAuth && USAGE_APIKEY_PROVIDERS.includes(connection.provider);

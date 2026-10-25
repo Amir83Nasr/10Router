@@ -1,7 +1,7 @@
 /**
  * Wrap chat-completions endpoints (with built-in web search) into the unified
  * /v1/search response format. Supports gemini, antigravity, openai, xai,
- * minimax, perplexity.
+ * perplexity.
  */
 import { PROVIDER_MEDIA } from "../../providers/index.js";
 import { ANTIGRAVITY_IDE_USER_AGENT } from "../../providers/shared.js";
@@ -246,62 +246,6 @@ const CHAT_SEARCH_CONFIG = {
         for (const c of data.citations) {
           const n = normalizeCitation(c);
           if (n) citations.push(n);
-        }
-      }
-      const tokens = data?.usage?.total_tokens || 0;
-      return { text, citations, tokens };
-    },
-  },
-
-  minimax: {
-    endpoint: () => searchEndpoint("minimax"),
-    buildBody: (query, model) => ({
-      model,
-      messages: [{ role: "user", content: query }],
-      tools: [{ type: "web_search" }],
-    }),
-    buildHeaders: (token) => ({
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    }),
-    extractAnswer: (data) => {
-      const msg = data?.choices?.[0]?.message || {};
-      const text = msg.content || "";
-      const citations = [];
-      const direct = Array.isArray(data?.web_search_results) ? data.web_search_results : [];
-      for (const it of direct) {
-        const url = it?.url || it?.link;
-        if (url) {
-          citations.push({
-            url,
-            title: it.title || "",
-            snippet: it.snippet || it.summary || "",
-          });
-        }
-      }
-      if (!citations.length) {
-        const calls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
-        for (const call of calls) {
-          const argStr = call?.function?.arguments;
-          if (!argStr) continue;
-          let parsed;
-          try {
-            parsed = typeof argStr === "string" ? JSON.parse(argStr) : argStr;
-          } catch {
-            continue;
-          }
-          const items = parsed?.results || parsed?.search_results || [];
-          if (Array.isArray(items)) {
-            for (const it of items) {
-              const url = it?.url || it?.link;
-              if (!url) continue;
-              citations.push({
-                url,
-                title: it.title || "",
-                snippet: it.snippet || "",
-              });
-            }
-          }
         }
       }
       const tokens = data?.usage?.total_tokens || 0;

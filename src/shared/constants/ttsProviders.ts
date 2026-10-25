@@ -82,11 +82,6 @@ export const TTS_PROVIDER_CONFIG: Record<string, TtsProviderConfig> = {
     voiceSource: "api-language",
     apiEndpoint: "/api/media-providers/tts/deepgram/voices",
   },
-  huggingface: {
-    hasModelSelector: true,
-    hasBrowseButton: false,
-    voiceSource: "config",
-  },
   cartesia: {
     hasModelSelector: true,
     hasBrowseButton: false,
@@ -124,22 +119,6 @@ export const TTS_PROVIDER_CONFIG: Record<string, TtsProviderConfig> = {
     hasBrowseButton: false,
     hasVoiceIdInput: true,
     voiceSource: "config",
-  },
-  minimax: {
-    hasModelSelector: true,
-    hasBrowseButton: true,
-    hasVoiceIdInput: true,
-    voiceSource: "api-language",
-    apiEndpoint: "/api/media-providers/tts/minimax/voices",
-    defaultVoiceId: "English_expressive_narrator",
-  },
-  "minimax-cn": {
-    hasModelSelector: true,
-    hasBrowseButton: true,
-    hasVoiceIdInput: true,
-    voiceSource: "api-language",
-    apiEndpoint: "/api/media-providers/tts/minimax/voices?provider=minimax-cn",
-    defaultVoiceId: "English_expressive_narrator",
   },
   gemini: {
     hasLanguageDropdown: false,

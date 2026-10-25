@@ -72,9 +72,12 @@ describe("provider test API key connection: opencode free tier probe (#5149)", (
     const res = await testSingleConnection("conn-opencode-go");
 
     expect(res).toMatchObject({ valid: true, error: null });
-    expect(mocks.fetchMock).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(2);
     const [url, options] = mocks.fetchMock.mock.calls[0];
     expect(url).toBe("https://opencode.ai/inference/go/openai/v1/chat/completions");
     expect(options.method).toBe("POST");
+    expect(mocks.fetchMock.mock.calls[1][0]).toBe(
+      "https://opencode.ai/inference/go/anthropic/v1/messages",
+    );
   });
 });

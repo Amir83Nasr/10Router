@@ -15,7 +15,6 @@ const OPENAI_COMPAT_PROVIDERS = [
   "github",
   "nvidia",
   "jina-ai",
-  "vercel-ai-gateway",
 ];
 
 const ADAPTERS = {

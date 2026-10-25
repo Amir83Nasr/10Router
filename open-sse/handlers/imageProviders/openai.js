@@ -1,4 +1,4 @@
-// OpenAI-compatible adapter (used by openai, minimax, openrouter, recraft)
+// OpenAI-compatible adapter (used by openai, openrouter, recraft)
 import { PROVIDER_MEDIA } from "../../providers/index.js";
 
 const imageCfg = (id) => PROVIDER_MEDIA[id]?.imageConfig || {};

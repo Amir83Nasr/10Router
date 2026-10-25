@@ -7,13 +7,7 @@ import {
 } from "open-sse/services/model.js";
 import REGISTRY from "open-sse/providers/registry/index.js";
 
-// Local provider alias overrides (HMR-friendly, applied on top of open-sse map)
-const LOCAL_PROVIDER_ALIASES: Record<string, string> = {
-  xmtp: "xiaomi-tokenplan",
-  "xiaomi-tokenplan": "xiaomi-tokenplan",
-};
-
-const RESERVED_PROVIDER_PREFIXES = new Set<string>(Object.keys(LOCAL_PROVIDER_ALIASES));
+const RESERVED_PROVIDER_PREFIXES = new Set<string>();
 for (const entry of REGISTRY) {
   RESERVED_PROVIDER_PREFIXES.add(entry.id);
   if (entry.alias) RESERVED_PROVIDER_PREFIXES.add(entry.alias);
@@ -21,11 +15,7 @@ for (const entry of REGISTRY) {
 }
 
 export function parseModel(modelStr: string): any {
-  const parsed = parseModelCore(modelStr);
-  if (parsed?.providerAlias && LOCAL_PROVIDER_ALIASES[parsed.providerAlias]) {
-    return { ...parsed, provider: LOCAL_PROVIDER_ALIASES[parsed.providerAlias] };
-  }
-  return parsed;
+  return parseModelCore(modelStr);
 }
 
 /**

@@ -129,7 +129,7 @@ for (const [cat, re] of Object.entries(CATEGORIES)) {
       } catch {}
     }
 
-    // regions (xiaomi-tokenplan)
+    // regions (multi-region providers)
     const regionsM = line.match(/regions:\s*(\[[\s\S]*?\])/);
     if (regionsM) {
       try {

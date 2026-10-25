@@ -226,8 +226,8 @@ describe("Claude client behind a forced-stream provider", () => {
 
   it("aggregates a Claude-target provider that answers in chat dialect", async () => {
     // The executor reports the requested format, not the reply's. Some providers
-    // answer their Claude transport in OpenAI dialect (documented for
-    // xiaomi-tokenplan), so the dialect must come from the payload.
+    // answer their Claude transport in OpenAI dialect, so the dialect must come
+    // from the payload.
     mockExecutor(
       sseResponse(
         chatSSE([chatChunk({ content: "<severity>0</severity>" }), chatChunk({}, "stop")]),

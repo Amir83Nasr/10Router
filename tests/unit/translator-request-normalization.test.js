@@ -96,7 +96,7 @@ describe("request normalization", () => {
     expect(userMessage.content).toBe("hello\nworld");
   });
 
-  it("translateRequest strips unsupported Anthropic output_config for MiniMax Claude-compatible endpoints", () => {
+  it("translateRequest strips unsupported Anthropic output_config for non-Anthropic Claude-compatible models", () => {
     const body = {
       model: "MiniMax-M2.7",
       system: [{ type: "text", text: "You are helpful." }],
@@ -128,7 +128,7 @@ describe("request normalization", () => {
       JSON.parse(JSON.stringify(body)),
       true,
       null,
-      "minimax",
+      "openrouter",
     );
 
     expect(result.output_config).toBeUndefined();

@@ -4,7 +4,6 @@ import gemini from "./gemini.js";
 import codex from "./codex.js";
 import sdwebui from "./sdwebui.js";
 import comfyui from "./comfyui.js";
-import huggingface from "./huggingface.js";
 import nanobanana from "./nanobanana.js";
 import falAi from "./falAi.js";
 import stabilityAi from "./stabilityAi.js";
@@ -14,16 +13,13 @@ import antigravity from "./antigravity.js";
 
 const ADAPTERS = {
   openai: createOpenAIAdapter("openai"),
-  minimax: createOpenAIAdapter("minimax"),
   openrouter: createOpenAIAdapter("openrouter"),
   recraft: createOpenAIAdapter("recraft"),
-  "vercel-ai-gateway": createOpenAIAdapter("vercel-ai-gateway"),
   xai: createOpenAIAdapter("xai"),
   gemini,
   codex,
   sdwebui,
   comfyui,
-  huggingface,
   nanobanana,
   antigravity,
   "fal-ai": falAi,

@@ -23,11 +23,6 @@ const upstream = {
 const entries = [
   { provider: "glm", model: "glm-4.6v", current: { contextWindow: 200000, maxOutput: 128000 } },
   {
-    provider: "glm-cn",
-    model: "glm-5-canary",
-    current: { contextWindow: 200000, maxOutput: 128000 },
-  },
-  {
     provider: "zhipu",
     model: "glm-5-canary",
     current: { contextWindow: 200000, maxOutput: 128000 },
@@ -77,11 +72,9 @@ describe("model catalog", () => {
 
   it("files an upstream provider under every local id that aliases it", () => {
     const { models } = build(upstream, entries);
-    // glm-cn and zhipu are both zhipuai upstream; neither may be dropped
-    expect(models["glm-cn:glm-5-canary"]).toEqual({ vision: true, pdf: true });
+    // zhipu is zhipuai upstream; the local id and the upstream name both resolve
     expect(models["zhipu:glm-5-canary"]).toEqual({ vision: true, pdf: true });
     expect(models["zhipuai:glm-5-canary"]).toEqual({ vision: true, pdf: true });
-    expect(getCatalogModalities("glm-cn", "glm-5-canary")).toEqual({ vision: true, pdf: true });
     expect(getCatalogModalities("zhipu", "glm-5-canary")).toEqual({ vision: true, pdf: true });
   });
 

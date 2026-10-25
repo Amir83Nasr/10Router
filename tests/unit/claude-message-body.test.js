@@ -161,9 +161,9 @@ describe("parseClaudeSSEToMessage", () => {
   });
 
   it("returns null for a chat-dialect stream even when asked for Claude", () => {
-    // A provider can answer its Claude transport in OpenAI dialect
-    // (documented for xiaomi-tokenplan). Parsing that as Anthropic used to
-    // yield a successful but empty message, silently dropping the answer.
+    // A provider can answer its Claude transport in OpenAI dialect. Parsing
+    // that as Anthropic used to yield a successful but empty message, silently
+    // dropping the answer.
     const openAISSE = [
       'data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":{"content":"the answer"},"finish_reason":null}]}',
       'data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":9,"completion_tokens":2}}',

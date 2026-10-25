@@ -1,31 +1,25 @@
 /**
- * GLM Coding Plan usage (international + China regions)
+ * GLM Coding Plan usage
  */
 
 import { proxyAwareFetch } from "../../utils/proxyFetch.js";
 import { U } from "./shared.js";
 
-// GLM quota endpoints (region-aware) — url from registry transport.usage
-const GLM_QUOTA_URLS = {
-  international: U("glm").url,
-  china: U("glm-cn").url,
-};
+// GLM quota endpoint — url from registry transport.usage
+const GLM_QUOTA_URL = U("glm").url;
 
 /**
- * GLM Coding Plan usage (international + China regions)
+ * GLM Coding Plan usage
  * Supports both TOKENS_LIMIT and CREDIT_LIMIT and dynamic intervals (e.g. session 5h, weekly 7d).
  */
-export async function getGlmUsage(apiKey, provider, proxyOptions = null) {
+export async function getGlmUsage(apiKey, proxyOptions = null) {
   if (!apiKey) {
     return { message: "GLM API key not available." };
   }
 
-  const region = provider === "glm-cn" ? "china" : "international";
-  const quotaUrl = GLM_QUOTA_URLS[region];
-
   try {
     const response = await proxyAwareFetch(
-      quotaUrl,
+      GLM_QUOTA_URL,
       {
         headers: {
           Authorization: `Bearer ${apiKey}`,

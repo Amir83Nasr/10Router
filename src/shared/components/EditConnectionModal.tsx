@@ -67,7 +67,7 @@ export default function EditConnectionModal({
           organization: connection.providerSpecificData.organization || "",
         });
       }
-      // Load region for providers that support it (e.g. xiaomi-tokenplan)
+      // Load region for providers that declare one
       const providerCfg = AI_PROVIDERS?.[connection.provider];
       if (providerCfg?.regions) {
         const savedRegion =

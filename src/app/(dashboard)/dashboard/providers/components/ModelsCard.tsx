@@ -3,10 +3,11 @@ import Icon from "@/shared/components/Icon";
 
 import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
+import { getModelsByProviderId, getModelKind, isFreeTierModel } from "@/shared/constants/models";
 import { getProviderAlias } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 
@@ -83,9 +84,17 @@ export function ModelRow({
           </span>
         </div>
         {isFree && (
-          <span className="text-[10px] font-bold text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded">
-            FREE
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge className="bg-green-500/10 font-bold text-green-600 dark:text-green-500">
+                FREE
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              Free model: works through the free OpenCode lane. An OpenCode Zen/Go API key cannot
+              unlock it.
+            </TooltipContent>
+          </Tooltip>
         )}
         {isCustom && (
           <Tooltip>
@@ -299,7 +308,7 @@ export default function ModelsCard({ providerId, kindFilter, providerAliasOverri
                   testStatus={modelTestResults[model.id]}
                   onTest={() => handleTestModel(model.id)}
                   isTesting={testingModelId === model.id}
-                  isFree={model.isFree}
+                  isFree={model.isFree || isFreeTierModel(providerAlias, model.id)}
                 />
               );
             })}

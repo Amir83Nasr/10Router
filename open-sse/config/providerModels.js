@@ -89,6 +89,19 @@ export function getModelType(aliasOrId, modelId) {
   return found?.kind || found?.type || null;
 }
 
+// Billing tier declared in the registry (`tier: "free"`). Model catalogs do not
+// carry this information, so it stays config-driven here.
+export function getModelTier(aliasOrId, modelId) {
+  const alias = PROVIDER_ID_TO_ALIAS[aliasOrId] || aliasOrId;
+  const models = PROVIDER_MODELS[alias];
+  if (!models) return null;
+  return findModel(models, modelId, alias)?.tier || null;
+}
+
+export function isFreeTierModel(aliasOrId, modelId) {
+  return getModelTier(aliasOrId, modelId) === "free";
+}
+
 export function getModelUpstreamId(aliasOrId, modelId) {
   // Split off thinking suffix "(level)" so lookup hits the base id; re-append it to
   // the result so downstream applyThinking still sees the suffix (body.model is stripped separately).

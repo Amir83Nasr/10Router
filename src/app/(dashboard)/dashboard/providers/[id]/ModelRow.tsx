@@ -1,5 +1,6 @@
 import Icon from "@/shared/components/Icon";
 import { CapacityBadges } from "@/shared/components";
+import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function ModelRow({
@@ -53,6 +54,19 @@ export default function ModelRow({
             <CapacityBadges caps={caps} colorOverride="text-muted-foreground/70" size={12} />
           </span>
         </div>
+        {isFree && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge className="shrink-0 bg-green-500/10 font-bold text-green-600 dark:text-green-500">
+                FREE
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              Free model: works through the free OpenCode lane. An OpenCode Zen/Go API key cannot
+              unlock it.
+            </TooltipContent>
+          </Tooltip>
+        )}
         {onTest && (
           <div className="relative shrink-0 group/btn">
             <button

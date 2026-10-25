@@ -100,8 +100,11 @@ function chatFunctionOf(tool) {
 function isFingerprintDefinition(tool, key) {
   const def = tool && (chatFunctionOf(tool) || tool);
   const want = FINGERPRINT_TOOL_DEFINITIONS[key];
-  return !!def && normalizePlatformSentence(def.description) === want.description
-    && JSON.stringify(def.parameters) === JSON.stringify(want.parameters);
+  return (
+    !!def &&
+    normalizePlatformSentence(def.description) === want.description &&
+    JSON.stringify(def.parameters) === JSON.stringify(want.parameters)
+  );
 }
 
 // OpenCode ships the same tool with OS-specific wording: "Commands run on Linux
@@ -109,7 +112,8 @@ function isFingerprintDefinition(tool, key) {
 // compares descriptions verbatim, so a Windows caller's tool must travel with the
 // canonical sentence — otherwise it looks like a foreign tool, gets renamed to
 // `shell_client` and the client rejects the call (#5011).
-const PLATFORM_SENTENCE_RE = /Commands run on (?:Linux using bash|Windows using powershell(?:\.exe)?)\./;
+const PLATFORM_SENTENCE_RE =
+  /Commands run on (?:Linux using bash|Windows using powershell(?:\.exe)?)\./;
 const CANONICAL_PLATFORM_SENTENCE = "Commands run on Linux using bash.";
 
 function normalizePlatformSentence(text) {

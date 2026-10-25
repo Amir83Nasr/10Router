@@ -60,6 +60,10 @@ const COOLDOWN = {
  */
 export const ERROR_RULES = [
   // --- Text-based rules (checked first, order = priority) ---
+  // OpenCode free-tier entitlement (free models requested through an API key)
+  // is a permanent plan gate, not an account failure: hand the error to the
+  // caller without cooling the account or falling back to another connection.
+  { text: "free models work in opencode", noFallback: true },
   { text: "no credentials", cooldownMs: COOLDOWN.long },
   { text: "request not allowed", cooldownMs: COOLDOWN.short },
   { text: "improperly formed request", cooldownMs: COOLDOWN.long },

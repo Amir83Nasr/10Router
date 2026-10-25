@@ -87,11 +87,17 @@ export default {
     { id: "qwen3.7-plus", name: "Qwen 3.7 Plus", supportedFormats: ["openai", "claude"] },
     { id: "hy4-preview", name: "Hy4 Preview", supportedFormats: ["openai"] },
     { id: "hy3", name: "Hy3", supportedFormats: ["openai"] },
-    { id: "space-bunny-free", name: "Space Bunny Free", supportedFormats: ["openai"] },
+    {
+      id: "space-bunny-free",
+      name: "Space Bunny Free",
+      supportedFormats: ["openai"],
+      tier: "free",
+    },
     {
       id: "longcat-2.5-preview-free",
       name: "LongCat 2.5 Preview Free",
       supportedFormats: ["openai"],
+      tier: "free",
     },
     // Served by /inference/go/openai/v1/responses only — the responses-only entry forces chatCore
     // past the sourceFormat-matched transports into translation (see chatCore guard).

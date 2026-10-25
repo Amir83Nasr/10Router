@@ -1,3 +1,9 @@
+import {
+  OPENCODE_ENTITLEMENT_MESSAGE,
+  isFreeTierEntitlementMessage,
+} from "../config/opencodeErrors.js";
+import { isQuotaError, readErrorEnvelope } from "./opencodeErrors.js";
+
 // Short in-memory backoff for the OpenCode free lane (`Authorization: Bearer public`).
 //
 // Root cause it addresses: the free lane is one global upstream quota pool behind
@@ -35,36 +41,55 @@ export function parseRetryAfterMs(value) {
 }
 
 // Returns { status, message, resetsAtMs } for FreeUsageLimit 429s, else null so
-// callers fall through to the default parser.
+// callers fall through to the default parser. Entitlement failures (free models
+// requested through an API key) are permanent: no breaker, actionable message.
 export function parseFreeUsageError(response, bodyText) {
   try {
     if (!response || response.status !== 429) return null;
-    let type = "";
-    let msg = "";
-    try {
-      const json = JSON.parse(bodyText || "{}");
-      const err = json?.error && typeof json.error === "object" ? json.error : null;
-      type = err?.type || json?.type || "";
-      msg = err?.message || json?.message || "";
-    } catch {
-      msg = bodyText || "";
+    const envelope = readErrorEnvelope(bodyText);
+    const str = envelope.message || "";
+    if (isFreeTierEntitlementMessage(str)) {
+      return {
+        status: 429,
+        kind: "entitlement",
+        message: OPENCODE_ENTITLEMENT_MESSAGE,
+        resetsAtMs: null,
+      };
     }
-    const str = typeof msg === "string" ? msg : JSON.stringify(msg);
-    if (type !== "FreeUsageLimitError" && !/rate limit/i.test(str)) return null;
+    if (envelope.type !== "FreeUsageLimitError" && !isQuotaError(str)) return null;
     const retryMs = parseRetryAfterMs(response.headers?.get?.("retry-after"));
     const resetsAtMs = retryMs ? Date.now() + retryMs : null;
     const hint = retryMs ? ` (retry after ${humanMs(retryMs)})` : "";
     // Our own synthetic 429 (already carries the "(local backoff, …)" hint): don't relabel it "upstream".
     if (/local backoff/i.test(str)) {
-      return { status: 429, message: `OpenCode free-tier quota exhausted: ${str}`, resetsAtMs };
+      return {
+        status: 429,
+        kind: "quota",
+        message: `OpenCode free-tier quota exhausted: ${str}`,
+        resetsAtMs,
+      };
     }
     return {
       status: 429,
+      kind: "quota",
       message: `OpenCode free-tier quota exhausted upstream${hint}: ${str || "Rate limit exceeded"}`,
       resetsAtMs,
     };
   } catch {
     return null; // fail-open
+  }
+}
+
+// Classify an upstream response as a permanent entitlement gate (vs a quota
+// window) without consuming it. Used by executors to decide whether the local
+// breaker may record a cooldown.
+export async function isEntitlementResponse(response) {
+  if (!response || response.status !== 429) return false;
+  try {
+    const bodyText = await response.clone().text();
+    return isFreeTierEntitlementMessage(readErrorEnvelope(bodyText).message);
+  } catch {
+    return false;
   }
 }
 
@@ -114,6 +139,22 @@ export function syntheticFreeUsageResponse(remainingMs) {
     {
       status: 429,
       headers: { "content-type": "application/json", "retry-after": String(secs) },
+    },
+  );
+}
+
+// Fail-fast response for free-tier models requested on a keyed lane. No
+// retry-after: the gate is a plan entitlement, not a temporary window.
+export function syntheticEntitlementResponse() {
+  return new Response(
+    JSON.stringify({
+      type: "error",
+      error: { type: "FreeUsageLimitError", message: OPENCODE_ENTITLEMENT_MESSAGE },
+      metadata: {},
+    }),
+    {
+      status: 429,
+      headers: { "content-type": "application/json" },
     },
   );
 }

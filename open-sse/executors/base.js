@@ -107,7 +107,10 @@ export class BaseExecutor {
   }
 
   parseError(response, bodyText) {
-    return { status: response.status, message: bodyText || `HTTP ${response.status}` };
+    // No provider-specific shape: let parseUpstreamError() extract the message
+    // from the OpenAI/Anthropic/Google error envelope. Returning the raw body
+    // here used to short-circuit that normalization for every default executor.
+    return null;
   }
 
   async execute({ model, body, stream, credentials, signal, log, proxyOptions = null }) {

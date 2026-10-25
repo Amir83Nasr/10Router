@@ -21,9 +21,7 @@ vi.mock("@/lib/network/proxyTest", () => ({
   testProxyUrl: mocks.testProxyUrl,
 }));
 
-const { testSingleConnection } = await import(
-  "../../src/app/api/providers/[id]/test/testUtils.js"
-);
+const { testSingleConnection } = await import("../../src/app/api/providers/[id]/test/testUtils.js");
 
 describe("provider test API key connection: opencode free tier probe (#5149)", () => {
   const originalFetch = global.fetch;
@@ -56,7 +54,7 @@ describe("provider test API key connection: opencode free tier probe (#5149)", (
     expect(mocks.fetchMock).not.toHaveBeenCalled();
     expect(mocks.updateProviderConnection).toHaveBeenCalledWith(
       "conn-opencode-free",
-      expect.objectContaining({ testStatus: "active", lastError: null })
+      expect.objectContaining({ testStatus: "active", lastError: null }),
     );
   });
 

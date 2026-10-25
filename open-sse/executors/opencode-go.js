@@ -2,13 +2,15 @@ import crypto from "node:crypto";
 import { DefaultExecutor } from "./default.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { modelTargetFormat } from "../providers/models/schema.js";
-import { getProviderModels } from "../config/providerModels.js";
+import { getProviderModels, isFreeTierModel } from "../config/providerModels.js";
 import {
   normalizeResponsesInput,
   clampResponsesCallId,
   coerceResponsesArguments,
   coerceResponsesOutput,
 } from "../translator/formats/responsesApi.js";
+import { syntheticEntitlementResponse } from "../utils/opencodeFreeUsage.js";
+import { parseOpenCodeAccountError } from "../utils/opencodeErrors.js";
 
 const SESSION_HEADER = "x-opencode-session";
 const SESSION_FIELD = "_opencodeGoSession";
@@ -165,8 +167,26 @@ export class OpenCodeGoExecutor extends DefaultExecutor {
   }
 
   async execute(args) {
+    // Free-tier models belong to the unauthenticated free lane. A Go key cannot
+    // unlock them, so answer with the same actionable entitlement error upstream
+    // would return instead of spending a call.
+    if (isFreeTierModel(this.provider, args?.model)) {
+      return {
+        response: syntheticEntitlementResponse(),
+        url: this.buildUrl(args?.model),
+        headers: {},
+        transformedBody: args?.body,
+      };
+    }
     const credentials = this.prepareRequestCredentials(args);
     return super.execute({ ...args, credentials });
+  }
+
+  parseError(response, bodyText) {
+    return (
+      parseOpenCodeAccountError(response, bodyText, { go: true, url: response?.url }) ||
+      super.parseError(response, bodyText)
+    );
   }
 
   buildHeaders(credentials, stream = true, url, model) {

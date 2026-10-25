@@ -20,8 +20,10 @@ import {
   freeUsageClearMs,
   recordFreeUsage,
   syntheticFreeUsageResponse,
+  isEntitlementResponse,
   FREE_USAGE_BREAKER_DEFAULT_MS,
 } from "../utils/opencodeFreeUsage.js";
+import { parseOpenCodeAccountError } from "../utils/opencodeErrors.js";
 
 // Key prefix: the free lane sits behind the `noauth` virtual connection
 // (Authorization: Bearer public for everyone); suffixed per model in execute().
@@ -435,13 +437,23 @@ export class OpenCodeExecutor extends BaseExecutor {
       ...args,
       credentials: this.prepareRequestCredentials(args),
     });
-    if (result?.response?.status === 429) recordFreeUsage(key, FREE_USAGE_BREAKER_DEFAULT_MS);
-    else if (result?.response?.ok) freeUsageClearMs(key);
+    // Only a temporary quota window earns the breaker. Entitlement 429s
+    // ("free models work in OpenCode") are permanent plan gates: cooling the
+    // model down would hide the actionable message for a minute.
+    if (result?.response?.status === 429) {
+      if (!(await isEntitlementResponse(result.response))) {
+        recordFreeUsage(key, FREE_USAGE_BREAKER_DEFAULT_MS);
+      }
+    } else if (result?.response?.ok) freeUsageClearMs(key);
     return result;
   }
 
   parseError(response, bodyText) {
-    return parseFreeUsageError(response, bodyText) || super.parseError(response, bodyText);
+    return (
+      parseFreeUsageError(response, bodyText) ||
+      parseOpenCodeAccountError(response, bodyText) ||
+      super.parseError(response, bodyText)
+    );
   }
 
   // Free tier runs on the Console Inference v2 API (OpenCode v2);

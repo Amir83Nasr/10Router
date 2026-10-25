@@ -51,6 +51,41 @@ export async function writeStreamError(writer, statusCode, message) {
 }
 
 /**
+ * Read a provider error envelope without assuming a shape. OpenAI/Anthropic
+ * wrap the payload in `error`, Google may return `[{ error: {...} }]`, and a
+ * proxy can hand back a bare string.
+ * @param {string|object} bodyText
+ * @returns {{type: string, code: string, message: string}}
+ */
+export function readErrorEnvelope(bodyText) {
+  if (bodyText && typeof bodyText === "object") return readErrorEnvelopeFromObject(bodyText);
+  const text = typeof bodyText === "string" ? bodyText.trim() : "";
+  if (!text) return { type: "", code: "", message: "" };
+  try {
+    return readErrorEnvelopeFromObject(JSON.parse(text));
+  } catch {
+    return { type: "", code: "", message: text };
+  }
+}
+
+function readErrorEnvelopeFromObject(value) {
+  const root = Array.isArray(value) ? value[0] : value;
+  if (!root || typeof root !== "object") {
+    return { type: "", code: "", message: typeof root === "string" ? root : "" };
+  }
+  const err = root.error && typeof root.error === "object" ? root.error : null;
+  const type = err?.type || root.type || "";
+  const code = err?.code || root.code || "";
+  const message =
+    err?.message || root.message || (typeof root.error === "string" ? root.error : "");
+  return {
+    type: typeof type === "string" ? type : "",
+    code: typeof code === "string" ? code : String(code || ""),
+    message: typeof message === "string" ? message : JSON.stringify(message),
+  };
+}
+
+/**
  * Parse upstream provider error response
  * @param {Response} response - Fetch response from provider
  * @param {object} [executor] - Optional executor with parseError() override for provider-specific parsing
@@ -86,8 +121,7 @@ export async function parseUpstreamError(response, executor = null) {
 
   let message = "";
   try {
-    const json = JSON.parse(bodyText);
-    message = json.error?.message || json.message || json.error || bodyText;
+    message = readErrorEnvelope(bodyText).message;
   } catch {
     message = bodyText;
   }
@@ -96,7 +130,7 @@ export async function parseUpstreamError(response, executor = null) {
   const finalMessage =
     messageStr || DEFAULT_ERROR_MESSAGES[response.status] || `Upstream error: ${response.status}`;
 
-  return { statusCode: response.status, message: finalMessage };
+  return { statusCode: response.status, message: finalMessage, resetsAtMs: undefined };
 }
 
 /**

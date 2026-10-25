@@ -251,19 +251,36 @@ export default {
     { id: "big-pickle", name: "Big Pickle", supportedFormats: ["openai"] },
     { id: "union-alpha", name: "Union Alpha", supportedFormats: ["claude"] },
     // Free tier on the keyed lane (chat completions)
-    { id: "deepseek-v4-flash-free", name: "DeepSeek V4 Flash Free", supportedFormats: ["openai"] },
-    { id: "mimo-v2.6-flash-free", name: "MiMo V2.6 Flash Free", supportedFormats: ["openai"] },
-    { id: "mimo-v2.5-free", name: "MiMo V2.5 Free", supportedFormats: ["openai"] },
+    {
+      id: "deepseek-v4-flash-free",
+      name: "DeepSeek V4 Flash Free",
+      supportedFormats: ["openai"],
+      tier: "free",
+    },
+    {
+      id: "mimo-v2.6-flash-free",
+      name: "MiMo V2.6 Flash Free",
+      supportedFormats: ["openai"],
+      tier: "free",
+    },
+    { id: "mimo-v2.5-free", name: "MiMo V2.5 Free", supportedFormats: ["openai"], tier: "free" },
     {
       id: "ling-3.0-flash-fin-free",
       name: "Ling 3.0 Flash Fin Free",
       supportedFormats: ["openai"],
+      tier: "free",
     },
-    { id: "nemotron-3-ultra-free", name: "Nemotron 3 Ultra Free", supportedFormats: ["openai"] },
+    {
+      id: "nemotron-3-ultra-free",
+      name: "Nemotron 3 Ultra Free",
+      supportedFormats: ["openai"],
+      tier: "free",
+    },
     {
       id: "nemotron-3.5-lightning-free",
       name: "Nemotron 3.5 Lightning Free",
       supportedFormats: ["openai"],
+      tier: "free",
     },
     // Free tier on the keyed lane (responses)
     {
@@ -271,16 +288,18 @@ export default {
       name: "Muse Spark 1.3 Contributor Free",
       targetFormat: "openai-responses",
       supportedFormats: ["openai-responses"],
+      tier: "free",
     },
     {
       id: "muse-spark-1.2-contributor-free",
       name: "Muse Spark 1.2 Contributor Free",
       targetFormat: "openai-responses",
       supportedFormats: ["openai-responses"],
+      tier: "free",
     },
     // System One (Jev) decision models on the native /systemone endpoint
     { id: "jev-1.13", name: "Jev 1.13", kind: "systemone" },
-    { id: "jev-1.13-free", name: "Jev 1.13 Free", kind: "systemone" },
+    { id: "jev-1.13-free", name: "Jev 1.13 Free", kind: "systemone", tier: "free" },
   ],
   serviceKinds: ["llm", "systemone"],
   systemoneConfig: {

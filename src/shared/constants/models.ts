@@ -11,6 +11,8 @@ export {
   getModelsByProviderId,
   getModelUpstreamId,
   getModelQuotaFamily,
+  getModelTier,
+  isFreeTierModel,
 } from "open-sse/config/providerModels.js";
 
 import { AI_PROVIDERS, isOpenAICompatibleProvider } from "./providers.js";

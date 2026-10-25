@@ -2,9 +2,11 @@ import crypto from "node:crypto";
 import { DefaultExecutor } from "./default.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { modelTargetFormat } from "../providers/models/schema.js";
-import { getProviderModels } from "../config/providerModels.js";
+import { getProviderModels, isFreeTierModel } from "../config/providerModels.js";
 import { isMuseSparkModel } from "../providers/models/helpers.js";
 import { applyFingerprintTools } from "../utils/opencodeFingerprint.js";
+import { syntheticEntitlementResponse } from "../utils/opencodeFreeUsage.js";
+import { parseOpenCodeAccountError } from "../utils/opencodeErrors.js";
 import {
   normalizeResponsesInput,
   clampResponsesCallId,
@@ -230,8 +232,26 @@ export class OpenCodeZenExecutor extends DefaultExecutor {
   }
 
   async execute(args) {
+    // Free-tier models are entitlement-gated on the keyed lane: upstream would
+    // answer 429 FreeUsageLimitError and the request would burn a call (and trip
+    // account fallback). Fail fast with the same shape + actionable message.
+    if (isFreeTierModel(this.provider, args?.model)) {
+      return {
+        response: syntheticEntitlementResponse(),
+        url: this.buildUrl(args?.model),
+        headers: {},
+        transformedBody: args?.body,
+      };
+    }
     const credentials = this.prepareRequestCredentials(args);
     return super.execute({ ...args, credentials });
+  }
+
+  parseError(response, bodyText) {
+    return (
+      parseOpenCodeAccountError(response, bodyText, { url: response?.url }) ||
+      super.parseError(response, bodyText)
+    );
   }
 
   buildHeaders(credentials, stream = true, url, model) {

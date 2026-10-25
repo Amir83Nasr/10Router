@@ -26,3 +26,4 @@ tests/__baseline__/*.json
 # Logs / local state
 logs
 *.log
+tests/.vitest-results.json

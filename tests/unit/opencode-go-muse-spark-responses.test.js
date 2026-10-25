@@ -55,10 +55,14 @@ describe("ocg/muse-spark-1.3-contributor catalog", () => {
 describe("OpenCodeGoExecutor routing + sanitization", () => {
   it("routes gpt-5.6-luna to /responses", () => {
     const ex = new OpenCodeGoExecutor();
-    expect(ex.buildUrl("gpt-5.6-luna")).toBe("https://opencode.ai/inference/go/openai/v1/responses");
+    expect(ex.buildUrl("gpt-5.6-luna")).toBe(
+      "https://opencode.ai/inference/go/openai/v1/responses",
+    );
     expect(
       ex.buildUrl("gpt-5.6-luna(high)", true, 0, {
-        runtimeTransport: { baseUrl: "https://opencode.ai/inference/go/openai/v1/chat/completions" },
+        runtimeTransport: {
+          baseUrl: "https://opencode.ai/inference/go/openai/v1/chat/completions",
+        },
       }),
     ).toBe("https://opencode.ai/inference/go/openai/v1/responses");
   });
@@ -68,7 +72,9 @@ describe("OpenCodeGoExecutor routing + sanitization", () => {
     expect(ex.buildUrl("grok-4.6")).toBe("https://opencode.ai/inference/go/openai/v1/responses");
     expect(
       ex.buildUrl("grok-4.6(high)", true, 0, {
-        runtimeTransport: { baseUrl: "https://opencode.ai/inference/go/openai/v1/chat/completions" },
+        runtimeTransport: {
+          baseUrl: "https://opencode.ai/inference/go/openai/v1/chat/completions",
+        },
       }),
     ).toBe("https://opencode.ai/inference/go/openai/v1/responses");
   });
@@ -80,14 +86,18 @@ describe("OpenCodeGoExecutor routing + sanitization", () => {
     // Even a stale runtimeTransport must not drag muse-spark onto chat/messages
     expect(
       ex.buildUrl(MODEL, true, 0, {
-        runtimeTransport: { baseUrl: "https://opencode.ai/inference/go/openai/v1/chat/completions" },
+        runtimeTransport: {
+          baseUrl: "https://opencode.ai/inference/go/openai/v1/chat/completions",
+        },
       }),
     ).toBe("https://opencode.ai/inference/go/openai/v1/responses");
   });
 
   it("leaves non-muse models on the default/runtime transport", () => {
     const ex = new OpenCodeGoExecutor();
-    expect(ex.buildUrl("kimi-k2.6")).toBe("https://opencode.ai/inference/go/openai/v1/chat/completions");
+    expect(ex.buildUrl("kimi-k2.6")).toBe(
+      "https://opencode.ai/inference/go/openai/v1/chat/completions",
+    );
     expect(
       ex.buildUrl("minimax-m3", true, 0, {
         runtimeTransport: { baseUrl: "https://opencode.ai/inference/go/anthropic/v1/messages" },

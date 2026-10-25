@@ -36,7 +36,7 @@ import {
   isAnthropicCompatibleProvider,
   AI_PROVIDERS,
 } from "@/shared/constants/providers";
-import { getModelsByProviderId, getModelKind } from "@/shared/constants/models";
+import { getModelsByProviderId, getModelKind, isFreeTierModel } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import { translate } from "@/i18n/runtime";
@@ -1128,7 +1128,7 @@ export default function ProviderDetailPage() {
                   : undefined
               }
               isTesting={testingModelIds.has(model.id)}
-              isFree={model.isFree}
+              isFree={model.isFree || isFreeTierModel(providerStorageAlias, model.id)}
               onDisable={() => handleDisableModel(model.id)}
               caps={getCaps(`${providerId}/${model.id}`)}
             />

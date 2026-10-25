@@ -477,6 +477,16 @@ export function hoistToolResultImages(body) {
   return touched ? { ...body, messages } : body;
 }
 
+// Body fields that only exist on Anthropic's Messages API (some are beta-only).
+// Claude Code sends them on every request; a non-Claude model reached through an
+// Anthropic-compatible transport (Qwen/GLM/Kimi on OpenCode Zen/Go) 400s on them.
+const CLAUDE_ONLY_BODY_FIELDS = [
+  "anthropic_beta",
+  "context_management",
+  "mcp_servers",
+  "safeguards",
+];
+
 export function prepareClaudeRequest(
   body,
   provider = null,
@@ -490,12 +500,22 @@ export function prepareClaudeRequest(
     delete body.output_config;
   }
 
+  if (body?.model && !/^claude/i.test(String(body.model))) {
+    for (const field of CLAUDE_ONLY_BODY_FIELDS) delete body[field];
+  }
+
+  // Anthropic requires max_tokens. Claude Code always sends it, but translated
+  // OpenAI/Gemini requests often omit it; fill it before clamping below.
+  const ceiling = getCapabilitiesForModel(provider, body.model).maxOutput || DEFAULT_MAX_TOKENS;
+  if (!body.max_tokens || body.max_tokens <= 0) {
+    body.max_tokens = Math.min(DEFAULT_MAX_TOKENS, ceiling);
+  }
+
   // Clamp max_tokens to the model's real output ceiling. Models whose caps
   // declare a higher maxOutput (e.g. Opus 4.8 / Sonnet 4.6 = 128000) are allowed
   // up to it, so max-effort thinking gets full budget; others fall back to the
   // conservative 64000 default.
   if (body.max_tokens) {
-    const ceiling = getCapabilitiesForModel(provider, body.model).maxOutput || DEFAULT_MAX_TOKENS;
     if (body.max_tokens > ceiling) body.max_tokens = ceiling;
 
     // Reconcile against thinking budget. applyThinking (thinkingUnified.js) runs

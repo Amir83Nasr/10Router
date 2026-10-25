@@ -12,7 +12,6 @@ export const CLI_TOOLS = {
       model: "ANTHROPIC_MODEL",
       opusModel: "ANTHROPIC_DEFAULT_OPUS_MODEL",
       sonnetModel: "ANTHROPIC_DEFAULT_SONNET_MODEL",
-      fableModel: "ANTHROPIC_DEFAULT_FABLE_MODEL",
       haikuModel: "ANTHROPIC_DEFAULT_HAIKU_MODEL",
       // Claude Code only exposes TodoWrite/TodoRead when the model id is one of
       // Anthropic's own (an internal allowlist in the CLI); routed models such
@@ -28,16 +27,9 @@ export const CLI_TOOLS = {
       // classifier for every session, with no dead round-trip first.
       autoModeServer: "CLAUDE_CODE_AUTO_MODE_SERVER",
     },
-    modelAliases: ["default", "sonnet", "opus", "fable", "haiku", "opusplan"],
+    modelAliases: ["default", "sonnet", "opus", "haiku", "opusplan"],
     settingsFile: "~/.claude/settings.json",
     defaultModels: [
-      {
-        id: "fable",
-        name: "Claude Fable",
-        alias: "fable",
-        envKey: "ANTHROPIC_DEFAULT_FABLE_MODEL",
-        defaultValue: "cc/claude-fable-5",
-      },
       {
         id: "opus",
         name: "Claude Opus",

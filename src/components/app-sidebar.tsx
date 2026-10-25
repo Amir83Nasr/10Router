@@ -52,6 +52,7 @@ const NAV: NavItem[] = [
 ];
 
 const SYSTEM: NavItem[] = [
+  { id: "logs", href: "/dashboard/console-log", label: "Logs", icon: "monitor" },
   { id: "proxy-pools", href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "waypoints" },
 ];
 

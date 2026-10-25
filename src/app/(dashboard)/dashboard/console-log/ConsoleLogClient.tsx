@@ -293,6 +293,15 @@ export default function ConsoleLogClient() {
     logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [logs, autoScroll]);
 
+  // Scrolling away from the bottom disengages Follow, so reading an older
+  // line isn't interrupted by every new one; scrolling back re-engages it.
+  const handleScroll = () => {
+    const el = logRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    setAutoScroll(atBottom);
+  };
+
   const toggleLevel = (level: LogLevel) => {
     setLevels((prev) => {
       const next = new Set(prev);
@@ -407,6 +416,7 @@ export default function ConsoleLogClient() {
       <CardContent className="pt-0">
         <div
           ref={logRef}
+          onScroll={handleScroll}
           className="h-[calc(100vh-220px)] overflow-y-auto rounded-b-lg border border-border bg-card p-2 font-mono text-xs"
         >
           {logs.length === 0 ? (

@@ -25,14 +25,16 @@ describe("Claude tool `type` defaulting is provider-scoped (#3905)", () => {
 
   it("never applies outside Claude-format requests or without tools", () => {
     expect(shouldDefaultClaudeToolType("gateway", FORMATS.OPENAI, tools, declaring)).toBe(false);
-    expect(shouldDefaultClaudeToolType("gateway", FORMATS.CLAUDE, undefined, declaring)).toBe(false);
+    expect(shouldDefaultClaudeToolType("gateway", FORMATS.CLAUDE, undefined, declaring)).toBe(
+      false,
+    );
     expect(shouldDefaultClaudeToolType("gateway", FORMATS.CLAUDE, null, declaring)).toBe(false);
   });
 
   it("no shipped provider declares the quirk", () => {
     expect(PROVIDERS.deepseek?.quirks?.requireClaudeToolType).toBeUndefined();
-    expect(
-      Object.values(PROVIDERS).filter((p) => p?.quirks?.requireClaudeToolType),
-    ).toHaveLength(0);
+    expect(Object.values(PROVIDERS).filter((p) => p?.quirks?.requireClaudeToolType)).toHaveLength(
+      0,
+    );
   });
 });

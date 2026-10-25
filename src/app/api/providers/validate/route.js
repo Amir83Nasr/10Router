@@ -8,10 +8,7 @@ import {
 } from "@/shared/constants/providers";
 import { getDefaultModel } from "open-sse/config/providerModels.js";
 import { buildOpenCodeGoProbes } from "open-sse/services/opencodeGoProbe.js";
-import {
-  resolveOllamaLocalHost,
-  PROVIDERS,
-} from "open-sse/config/providers.js";
+import { resolveOllamaLocalHost, PROVIDERS } from "open-sse/config/providers.js";
 import { resolveQoderCredentials, resolveQoderModels } from "open-sse/services/qoderModels.js";
 import { normalizeProviderId } from "@/lib/providerNormalization";
 
@@ -339,9 +336,7 @@ export async function POST(request) {
           // Use baseUrl from PROVIDERS (DRY); separate openai-format vs claude-format flow
           const cfg = PROVIDERS[provider];
           const isOpenAiFormat =
-            provider === "alicode" ||
-            provider === "alicode-intl" ||
-            provider === "alims-intl";
+            provider === "alicode" || provider === "alicode-intl" || provider === "alims-intl";
 
           if (isOpenAiFormat) {
             const testModel = getDefaultModel(provider);

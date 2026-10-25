@@ -46,7 +46,7 @@ export default {
   ],
   serviceKinds: ["llm", "systemone"],
   systemoneConfig: {
-    baseUrl: "https://opencode.ai/inference/v1/systemone",
+    baseUrl: "https://opencode.ai/inference/systemone/v1/systemone",
     headers: {
       "x-opencode-client": "cli",
       "User-Agent": "opencode/latest/2.0.26/cli",

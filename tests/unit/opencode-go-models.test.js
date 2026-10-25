@@ -58,6 +58,7 @@ describe("OpenCode Go model catalog", () => {
       "kimi-k2.7-code",
       "kimi-k2.6",
       "kimi-k3",
+      "kimi-k3.1-pro",
       "deepseek-v4-pro",
       "deepseek-v4-flash",
       "deepseek-v4-flash-vision-exp",
@@ -67,7 +68,9 @@ describe("OpenCode Go model catalog", () => {
       "mimo-v2.5",
       "mimo-v2.5-pro",
       "minimax-m3",
+      "minimax-m3.1-flash",
       "minimax-m2.7",
+      "claude-haiku-5-5",
       "qwen3.8-max",
       "qwen3.8-flash",
       "qwen3.7-plus",
@@ -131,13 +134,13 @@ describe("OpenCode Go multi-endpoint transports", () => {
 
   it("resolveTransport picks the endpoint matching the client sourceFormat", () => {
     expect(resolveTransport("opencode-go", "claude").baseUrl).toBe(
-      "https://opencode.ai/inference/go/v1/messages",
+      "https://opencode.ai/inference/go/anthropic/v1/messages",
     );
     expect(resolveTransport("opencode-go", "openai-responses").baseUrl).toBe(
-      "https://opencode.ai/inference/go/v1/responses",
+      "https://opencode.ai/inference/go/openai/v1/responses",
     );
     expect(resolveTransport("opencode-go", "openai").baseUrl).toBe(
-      "https://opencode.ai/inference/go/v1/chat/completions",
+      "https://opencode.ai/inference/go/openai/v1/chat/completions",
     );
   });
 
@@ -152,7 +155,7 @@ describe("OpenCode Go per-model transport guard (chatCore logic)", () => {
   it("routes MiniMax/Qwen + claude-format client to /messages", () => {
     for (const m of CLAUDE_CAPABLE) {
       expect(pickTransport("opencode-go", "claude", "opencode-go", m)?.baseUrl).toBe(
-        "https://opencode.ai/inference/go/v1/messages",
+        "https://opencode.ai/inference/go/anthropic/v1/messages",
       );
     }
   });
@@ -166,7 +169,7 @@ describe("OpenCode Go per-model transport guard (chatCore logic)", () => {
   it("routes DeepSeek + responses-format client to /responses", () => {
     for (const m of RESPONSES_CAPABLE) {
       expect(pickTransport("opencode-go", "openai-responses", "opencode-go", m)?.baseUrl).toBe(
-        "https://opencode.ai/inference/go/v1/responses",
+        "https://opencode.ai/inference/go/openai/v1/responses",
       );
     }
   });
@@ -182,7 +185,7 @@ describe("OpenCode Go per-model transport guard (chatCore logic)", () => {
     ]) {
       expect(getModelSupportedFormats("opencode-go", m)).toEqual(["openai-responses"]);
       expect(pickTransport("opencode-go", "openai-responses", "opencode-go", m)?.baseUrl).toBe(
-        "https://opencode.ai/inference/go/v1/responses",
+        "https://opencode.ai/inference/go/openai/v1/responses",
       );
       expect(pickTransport("opencode-go", "claude", "opencode-go", m)).toBeNull();
       expect(pickTransport("opencode-go", "openai", "opencode-go", m)).toBeNull();

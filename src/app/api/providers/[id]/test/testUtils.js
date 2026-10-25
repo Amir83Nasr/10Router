@@ -908,7 +908,7 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
       }
       case "opencode-go": {
         const res = await fetchWithConnectionProxy(
-          "https://opencode.ai/inference/go/v1/chat/completions",
+          "https://opencode.ai/inference/go/openai/v1/chat/completions",
           {
             method: "POST",
             headers: {

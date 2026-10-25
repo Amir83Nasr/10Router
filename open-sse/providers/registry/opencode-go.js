@@ -17,7 +17,7 @@ export default {
   },
   category: "apikey",
   transport: {
-    baseUrl: "https://opencode.ai/inference/go/v1/chat/completions",
+    baseUrl: "https://opencode.ai/inference/go/openai/v1/chat/completions",
     headers: {},
     usage: {
       url: "https://opencode.ai/inference/go/v1/usage",
@@ -29,7 +29,7 @@ export default {
   transports: [
     {
       format: "openai",
-      baseUrl: "https://opencode.ai/inference/go/v1/chat/completions",
+      baseUrl: "https://opencode.ai/inference/go/openai/v1/chat/completions",
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
       // OpenAI dialect only: the gateway rejects `thinking`/`enable_thinking`
       // (400 unknown field "thinking"), so normalize reasoning to reasoning_effort.
@@ -37,12 +37,12 @@ export default {
     },
     {
       format: "claude",
-      baseUrl: "https://opencode.ai/inference/go/v1/messages",
+      baseUrl: "https://opencode.ai/inference/go/anthropic/v1/messages",
       auth: { combined: true, header: "x-api-key", scheme: "raw", anthropicVersion: true },
     },
     {
       format: "openai-responses",
-      baseUrl: "https://opencode.ai/inference/go/v1/responses",
+      baseUrl: "https://opencode.ai/inference/go/openai/v1/responses",
       auth: { combined: true, header: "Authorization", scheme: "bearer" },
       thinkingFormat: "openai",
     },
@@ -57,6 +57,7 @@ export default {
     { id: "kimi-k2.7-code", name: "Kimi K2.7 Code", supportedFormats: ["openai"] },
     { id: "kimi-k2.6", name: "Kimi K2.6", supportedFormats: ["openai"] },
     { id: "kimi-k3", name: "Kimi K3", supportedFormats: ["openai"] },
+    { id: "kimi-k3.1-pro", name: "Kimi K3.1 Pro", supportedFormats: ["openai"] },
     {
       id: "deepseek-v4-pro",
       name: "DeepSeek V4 Pro",
@@ -78,7 +79,9 @@ export default {
     { id: "mimo-v2.5", name: "MiMo V2.5", supportedFormats: ["openai"] },
     { id: "mimo-v2.5-pro", name: "MiMo V2.5 Pro", supportedFormats: ["openai"] },
     { id: "minimax-m3", name: "MiniMax M3", supportedFormats: ["openai", "claude"] },
+    { id: "minimax-m3.1-flash", name: "MiniMax M3.1 Flash", supportedFormats: ["openai"] },
     { id: "minimax-m2.7", name: "MiniMax M2.7", supportedFormats: ["openai", "claude"] },
+    { id: "claude-haiku-5-5", name: "Claude Haiku 5.5", supportedFormats: ["claude"] },
     { id: "qwen3.8-max", name: "Qwen 3.8 Max", supportedFormats: ["openai", "claude"] },
     { id: "qwen3.8-flash", name: "Qwen 3.8 Flash", supportedFormats: ["openai", "claude"] },
     { id: "qwen3.7-plus", name: "Qwen 3.7 Plus", supportedFormats: ["openai", "claude"] },
@@ -90,7 +93,7 @@ export default {
       name: "LongCat 2.5 Preview Free",
       supportedFormats: ["openai"],
     },
-    // Served by /inference/go/v1/responses only — the responses-only entry forces chatCore
+    // Served by /inference/go/openai/v1/responses only — the responses-only entry forces chatCore
     // past the sourceFormat-matched transports into translation (see chatCore guard).
     {
       id: "grok-4.7",

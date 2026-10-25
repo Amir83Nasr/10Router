@@ -190,24 +190,6 @@ export default function ProvidersPage() {
   const matchStatus = (stats, isNoAuth = false) =>
     matchesStatusFilter(statusFilter, stats, isNoAuth);
 
-  // Toggle all connections for a provider on/off. authType may be a single
-  // string or an array (dual-auth counts oauth + api_key/apikey together).
-  const handleToggleProvider = async (providerId, authType, newActive) => {
-    const authTypes = Array.isArray(authType) ? authType : [authType];
-    const matches = (c) => c.provider === providerId && authTypes.includes(c.authType);
-    const providerConns = connections.filter(matches);
-    setConnections((prev) => prev.map((c) => (matches(c) ? { ...c, isActive: newActive } : c)));
-    await Promise.allSettled(
-      providerConns.map((c) =>
-        fetch(`/api/providers/${c.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isActive: newActive }),
-        }),
-      ),
-    );
-  };
-
   const compatibleProviders = providerNodes
     .filter((node) => node.type === "openai-compatible")
     .map((node) => ({
@@ -375,7 +357,6 @@ export default function ProvidersPage() {
                   provider={info}
                   stats={getProviderStats(info.id, "apikey")}
                   authType="compatible"
-                  onToggle={(active) => handleToggleProvider(info.id, "apikey", active)}
                 />
               ))}
             </CardGrid>
@@ -395,7 +376,6 @@ export default function ProvidersPage() {
                     provider={info}
                     stats={getProviderStats(key, authTypes)}
                     authType="oauth"
-                    onToggle={(active) => handleToggleProvider(key, authTypes, active)}
                   />
                 );
               })}
@@ -418,7 +398,6 @@ export default function ProvidersPage() {
                     provider={info}
                     stats={getProviderStats(key, freeAuthTypes)}
                     authType="free"
-                    onToggle={(active) => handleToggleProvider(key, freeAuthTypes, active)}
                   />
                 );
               })}
@@ -433,7 +412,6 @@ export default function ProvidersPage() {
                     authType={
                       Array.isArray(freeAuthTypes) ? (freeAuthTypes[0] ?? "apikey") : freeAuthTypes
                     }
-                    onToggle={(active) => handleToggleProvider(key, freeAuthTypes, active)}
                   />
                 );
               })}
@@ -456,7 +434,6 @@ export default function ProvidersPage() {
               provider={info}
               stats={getProviderStats(key, "apikey")}
               authType="apikey"
-              onToggle={(active) => handleToggleProvider(key, "apikey", active)}
             />
           ))}
         </div>
@@ -500,7 +477,7 @@ function DisabledBadge() {
   );
 }
 
-function ProviderCard({ providerId, provider, stats, authType, onToggle }: any) {
+function ProviderCard({ providerId, provider, stats, authType }: any) {
   const { connected, error, errorCode, errorTime, allDisabled } = stats;
   const isNoAuth = !!provider.noAuth;
 
@@ -521,16 +498,6 @@ function ProviderCard({ providerId, provider, stats, authType, onToggle }: any) 
         />
       }
       meta={errorTime && !allDisabled && !isNoAuth ? errorTime : undefined}
-      toggle={
-        stats.total > 0
-          ? {
-              checked: !allDisabled,
-              enabledLabel: "Enable provider",
-              disabledLabel: "Disable provider",
-              onToggle: (active: boolean) => onToggle(active),
-            }
-          : undefined
-      }
     >
       {allDisabled ? (
         <DisabledBadge />
@@ -546,7 +513,7 @@ function ProviderCard({ providerId, provider, stats, authType, onToggle }: any) 
   );
 }
 
-function ApiKeyProviderCard({ providerId, provider, stats, authType, onToggle }: any) {
+function ApiKeyProviderCard({ providerId, provider, stats, authType }: any) {
   const { connected, error, errorCode, errorTime, allDisabled } = stats;
   const isCompatible = providerId.startsWith(OPENAI_COMPATIBLE_PREFIX);
   const isAnthropicCompatible = providerId.startsWith(ANTHROPIC_COMPATIBLE_PREFIX);
@@ -590,16 +557,6 @@ function ApiKeyProviderCard({ providerId, provider, stats, authType, onToggle }:
         />
       }
       meta={errorTime && !allDisabled ? errorTime : undefined}
-      toggle={
-        stats.total > 0
-          ? {
-              checked: !allDisabled,
-              enabledLabel: "Enable provider",
-              disabledLabel: "Disable provider",
-              onToggle: (active: boolean) => onToggle(active),
-            }
-          : undefined
-      }
     >
       {allDisabled ? (
         <DisabledBadge />

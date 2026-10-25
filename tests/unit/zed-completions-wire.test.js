@@ -126,6 +126,75 @@ describe("completion payload shaping", () => {
     );
   });
 
+  it("strips the thinking suffix before the catalog lookup and the wire model", async () => {
+    // The id has no family hint, so provider inference cannot rescue a failed
+    // lookup: seeing "google" proves the catalog was queried with the clean id.
+    resolveZedModels.mockImplementation(async () => catalogFor([["m", { provider: "google" }]]));
+    const captured = {};
+    mockCatalogFetch(captured);
+    const executor = makeExecutor();
+
+    await executor.execute({
+      model: "m(high)",
+      body: { ...CHAT_BODY },
+      stream: false,
+      credentials: {},
+    });
+
+    expect(captured.body.provider).toBe("google");
+    expect(captured.body.model).toBe("m");
+    expect(captured.body.provider_request.model).toBe("m");
+  });
+
+  it("forwards thinking depth on the Claude path and keeps max_tokens valid", async () => {
+    resolveZedModels.mockImplementation(async () =>
+      catalogFor([
+        [
+          "claude-sonnet-4.5",
+          { provider: "anthropic", supports_thinking: true, max_output_tokens: 32000 },
+        ],
+      ]),
+    );
+    const captured = {};
+    mockCatalogFetch(captured);
+    const executor = makeExecutor();
+
+    await executor.execute({
+      model: "claude-sonnet-4.5(high)",
+      body: { ...CHAT_BODY, max_tokens: 1000 },
+      stream: true,
+      credentials: {},
+    });
+
+    const request = captured.body.provider_request;
+    expect(request.model).toBe("claude-sonnet-4.5");
+    expect(request.thinking).toMatchObject({ type: "enabled" });
+    expect(request.thinking.budget_tokens).toBeGreaterThan(0);
+    // Anthropic rejects max_tokens <= budget_tokens, and the catalog ceiling wins.
+    expect(request.max_tokens).toBeGreaterThan(request.thinking.budget_tokens);
+    expect(request.max_tokens).toBeLessThanOrEqual(32000);
+  });
+
+  it("does not advertise thinking when the catalog model cannot think", async () => {
+    resolveZedModels.mockImplementation(async () =>
+      catalogFor([["claude-sonnet-4.5", { provider: "anthropic", supports_thinking: false }]]),
+    );
+    const captured = {};
+    mockCatalogFetch(captured);
+    const executor = makeExecutor();
+
+    await executor.execute({
+      model: "claude-sonnet-4.5(high)",
+      body: { ...CHAT_BODY, reasoning_effort: "high" },
+      stream: true,
+      credentials: {},
+      log: { warn: vi.fn() },
+    });
+
+    expect(captured.body.provider_request.thinking).toBeUndefined();
+    expect(captured.body.provider_request.reasoning_effort).toBeUndefined();
+  });
+
   it("maps HTTP 451 geo-block to a 451 with proxy guidance", async () => {
     const executor = makeExecutor();
     const response = new Response("{}", {

@@ -3,28 +3,20 @@ import { DefaultExecutor } from "./default.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { modelTargetFormat } from "../providers/models/schema.js";
 import { getProviderModels, isFreeTierModel } from "../config/providerModels.js";
+import { normalizeResponsesInput } from "../translator/formats/responsesApi.js";
 import {
-  normalizeResponsesInput,
-  clampResponsesCallId,
-  coerceResponsesArguments,
-  coerceResponsesOutput,
-} from "../translator/formats/responsesApi.js";
+  baseModelId,
+  normalizeSession,
+  normalizeResponsesTools,
+  sanitizeResponsesItems,
+} from "./opencodeShared.js";
 import { syntheticEntitlementResponse } from "../utils/opencodeFreeUsage.js";
 import { parseOpenCodeAccountError } from "../utils/opencodeErrors.js";
 
 const SESSION_HEADER = "x-opencode-session";
 const SESSION_FIELD = "_opencodeGoSession";
-const MAX_SESSION_LENGTH = 256;
 
 const RESPONSES_BASE_URL = "https://opencode.ai/inference/go/openai/v1/responses";
-const MAX_TOOL_NAME_LEN = 128;
-
-function normalizeSession(value) {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim();
-  if (!normalized || normalized.length > MAX_SESSION_LENGTH) return null;
-  return normalized;
-}
 
 function nativeSession(headers) {
   if (!headers || typeof headers !== "object") return null;
@@ -43,98 +35,11 @@ function translatedSession(sessionId, clientTool) {
   return `ses_${digest}`;
 }
 
-// Strip the thinking suffix "model(level)" so checks hit the base id.
-function baseModelId(model) {
-  return String(model || "")
-    .replace(/\([^()]+\)\s*$/, "")
-    .trim();
-}
-
 // Responses-only per the provider registry (grok-4.6, gpt-5.6-luna, muse-spark, …).
 // Reading the registry keeps this in sync with config — never hardcode model ids here.
 function isResponsesModel(model) {
   const entry = getProviderModels("opencode-go").find((m) => m.id === baseModelId(model));
   return modelTargetFormat(entry) === "openai-responses";
-}
-
-// Flatten Chat Completions tool declarations into the Responses flat shape and
-// drop hosted/nameless tools the /responses endpoint rejects.
-function normalizeResponsesTools(body) {
-  if (!Array.isArray(body.tools)) return;
-  const validNames = new Set();
-  body.tools = body.tools.filter((tool) => {
-    if (!tool || typeof tool !== "object" || Array.isArray(tool)) return false;
-    const fn =
-      tool.function && typeof tool.function === "object" && !Array.isArray(tool.function)
-        ? tool.function
-        : null;
-    const rawName =
-      typeof tool.name === "string" ? tool.name : typeof fn?.name === "string" ? fn.name : "";
-    const name = rawName.trim();
-    if (!name) return false;
-    const description =
-      typeof tool.description === "string"
-        ? tool.description
-        : typeof fn?.description === "string"
-          ? fn.description
-          : "";
-    let parameters =
-      tool.parameters && typeof tool.parameters === "object" && !Array.isArray(tool.parameters)
-        ? tool.parameters
-        : fn?.parameters && typeof fn.parameters === "object" && !Array.isArray(fn.parameters)
-          ? fn.parameters
-          : { type: "object", properties: {} };
-    // Mirror the request translator: {type:"object"} without properties is rejected
-    // by strict Responses backends, so fill in the empty properties map.
-    if (parameters.type === "object" && !parameters.properties)
-      parameters = { ...parameters, properties: {} };
-    for (const k of Object.keys(tool)) delete tool[k];
-    tool.type = "function";
-    tool.name = name.slice(0, MAX_TOOL_NAME_LEN);
-    if (description) tool.description = description;
-    tool.parameters = parameters;
-    validNames.add(tool.name);
-    return true;
-  });
-  if (
-    body.tool_choice &&
-    typeof body.tool_choice === "object" &&
-    !Array.isArray(body.tool_choice)
-  ) {
-    if (body.tool_choice.type === "function") {
-      const n = typeof body.tool_choice.name === "string" ? body.tool_choice.name.trim() : "";
-      if (!n || !validNames.has(n)) delete body.tool_choice;
-    }
-  }
-}
-
-// Last line of defense for native Responses clients (sourceFormat === targetFormat
-// skips translation): coerce items in place so malformed tool payloads 400 here
-// with a clear shape instead of upstream as InputValidationError.
-function sanitizeResponsesItems(body) {
-  if (!Array.isArray(body.input)) return;
-  body.input = body.input.filter((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return true;
-    // Strip prior-turn reasoning items: Muse Spark contributor models route to
-    // an upstream Console backend where encrypted_content cannot be validated across
-    // rotated accounts or sessions, causing 400 "reasoning encrypted_content was not issued to this caller".
-    if (item.type === "reasoning") return false;
-    delete item.encrypted_content;
-    delete item.reasoning_encrypted_content;
-    if (item.type === "function_call") {
-      if (!item.name || typeof item.name !== "string" || item.name.trim() === "") return false;
-      item.name = item.name.trim().slice(0, MAX_TOOL_NAME_LEN);
-      item.call_id = clampResponsesCallId(item.call_id);
-      item.arguments = coerceResponsesArguments(item.arguments);
-      return true;
-    }
-    if (item.type === "function_call_output") {
-      item.call_id = clampResponsesCallId(item.call_id);
-      item.output = coerceResponsesOutput(item.output);
-      return true;
-    }
-    return true;
-  });
 }
 
 export class OpenCodeGoExecutor extends DefaultExecutor {

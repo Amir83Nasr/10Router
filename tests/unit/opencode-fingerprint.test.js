@@ -101,7 +101,27 @@ describe("opencodeFingerprint — request side", () => {
 
     const claudeShape = { system: "Be brief.", messages: [{ role: "user", content: "hi" }] };
     applyFingerprintTools(claudeShape, false);
+    // Anthropic rejects role "system" inside `messages`: the note goes to `system`.
     expect(claudeShape.messages).toHaveLength(1);
+    expect(claudeShape.system).toMatch(/^Be brief\.\n\nDo not call the `read` or `shell` tools;/);
+  });
+
+  it("writes the fingerprint in the Claude shape when the body is Anthropic", () => {
+    const body = {
+      system: [{ type: "text", text: "Be brief." }],
+      messages: [{ role: "user", content: "hi" }],
+      tools: [{ name: "Read", description: "Read a file", input_schema: { type: "object" } }],
+    };
+    applyFingerprintTools(body);
+
+    expect(namesOf(body.tools)).toEqual(["Read", "read", "shell"]);
+    const read = body.tools.find((tool) => tool.name === "read");
+    expect(read.function).toBeUndefined();
+    expect(read.input_schema.required).toEqual(["path"]);
+    // Block arrays keep their shape: the note joins the trailing text block.
+    expect(body.system).toHaveLength(1);
+    expect(body.system[0].text).toMatch(/^Be brief\.\n\nDo not call the `read` or `shell` tools;/);
+    expect(body.tool_choice).toBeUndefined();
   });
 
   it("retargets flat tool_choice that points at an aliased tool", () => {

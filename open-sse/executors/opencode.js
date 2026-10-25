@@ -6,7 +6,17 @@ import { getThinkingLevels } from "../providers/thinkingLevels.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { isMuseSparkModel } from "../providers/models/helpers.js";
-import { applyFingerprintTools } from "../utils/opencodeFingerprint.js";
+import {
+  applyFingerprintTools,
+  detectToolShape,
+  TOOL_SHAPE,
+} from "../utils/opencodeFingerprint.js";
+import {
+  baseModelId,
+  normalizeSession,
+  normalizeResponsesTools,
+  sanitizeResponsesItems,
+} from "./opencodeShared.js";
 import { ANTHROPIC_API_VERSION } from "../providers/shared.js";
 import {
   normalizeResponsesInput,
@@ -33,8 +43,6 @@ const FREE_USAGE_BREAKER_KEY = "opencode-free";
 // the v1 "opencode/1.18.x" form with 403 FreeTierError since 2026-10-14.
 const OPENCODE_UA = "opencode/latest/2.0.26/cli";
 const OPENCODE_CLIENT = "cli";
-const MAX_SESSION_LENGTH = 256;
-const MAX_TOOL_NAME_LEN = 128;
 const SESSION_HEADER = "x-opencode-session";
 const SESSION_FIELD = "_opencodeSession";
 export const OPENCODE_SESSION_RE = /^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/;
@@ -100,13 +108,6 @@ export function translateSessionId(sessionId, clientTool = "") {
     randomPart += BASE62_CHARS[digest[i] % 62];
   }
   return `ses_${timeHex}${randomPart}`;
-}
-
-function normalizeSession(value) {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim();
-  if (!normalized || normalized.length > MAX_SESSION_LENGTH) return null;
-  return normalized;
 }
 
 function nativeSession(headers) {
@@ -201,13 +202,6 @@ function bodyHasSessionHints(body) {
   }
 }
 
-// Strip the thinking suffix "model(level)" so registry lookups hit the base id.
-function baseModelId(model) {
-  return String(model || "")
-    .replace(/\([^()]+\)\s*$/, "")
-    .trim();
-}
-
 function isResponsesModel(model) {
   const base = baseModelId(model);
   return RESPONSES_MODELS.has(base) || isMuseSparkModel(base);
@@ -249,86 +243,6 @@ function resolveOpencodeSession(body, credentials, providerSessionId, clientTool
   }
 
   return stableSessionId(credentials);
-}
-
-function normalizeResponsesTools(body) {
-  if (!Array.isArray(body.tools)) return;
-  const validNames = new Set();
-  body.tools = body.tools.filter((tool) => {
-    if (!tool || typeof tool !== "object" || Array.isArray(tool)) return false;
-    const fn =
-      tool.function && typeof tool.function === "object" && !Array.isArray(tool.function)
-        ? tool.function
-        : null;
-    const rawName =
-      typeof tool.name === "string" ? tool.name : typeof fn?.name === "string" ? fn.name : "";
-    const name = rawName.trim();
-    if (!name) return false;
-    const description =
-      typeof tool.description === "string"
-        ? tool.description
-        : typeof fn?.description === "string"
-          ? fn.description
-          : "";
-    let parameters =
-      tool.parameters && typeof tool.parameters === "object" && !Array.isArray(tool.parameters)
-        ? tool.parameters
-        : fn?.parameters && typeof fn.parameters === "object" && !Array.isArray(fn.parameters)
-          ? fn.parameters
-          : { type: "object", properties: {} };
-    if (parameters.type === "object" && !parameters.properties)
-      parameters = { ...parameters, properties: {} };
-    for (const k of Object.keys(tool)) delete tool[k];
-    tool.type = "function";
-    tool.name = name.slice(0, MAX_TOOL_NAME_LEN);
-    if (description) tool.description = description;
-    tool.parameters = parameters;
-    validNames.add(tool.name);
-    return true;
-  });
-  if (
-    body.tool_choice &&
-    typeof body.tool_choice === "object" &&
-    !Array.isArray(body.tool_choice)
-  ) {
-    if (body.tool_choice.type === "function") {
-      const n = typeof body.tool_choice.name === "string" ? body.tool_choice.name.trim() : "";
-      if (!n || !validNames.has(n)) delete body.tool_choice;
-    }
-  }
-}
-
-function sanitizeResponsesItems(body) {
-  if (!Array.isArray(body.input)) return;
-  body.input = body.input.filter((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return true;
-    // Strip prior-turn reasoning items: OpenCode Free uses public/pooled credentials
-    // (`Bearer public`) routing to an upstream OpenAI/Console account pool.
-    // OpenAI Responses API strictly enforces that reasoning `encrypted_content`
-    // can only be decrypted by the exact caller/account that issued it; sending it
-    // across different accounts or rotating proxy relays triggers:
-    // [invalid_request_error] reasoning `encrypted_content` was not issued to this caller (400).
-    // Furthermore, under stateless mode (store=false), omitting encrypted_content
-    // causes OpenAI to reject the referenced reasoning item as "not found or was deleted".
-    // Dropping prior reasoning items allows multi-turn conversations and tool-calling
-    // loops to succeed cleanly.
-    if (item.type === "reasoning") return false;
-    delete item.encrypted_content;
-    delete item.reasoning_encrypted_content;
-    if (item.type === "function_call") {
-      if (!item.name || typeof item.name !== "string" || item.name.trim() === "") return false;
-      item.name = item.name.trim().slice(0, MAX_TOOL_NAME_LEN);
-      item.call_id = clampResponsesCallId(item.call_id);
-      item.arguments = coerceResponsesArguments(item.arguments);
-      return true;
-    }
-    if (item.type === "function_call_output") {
-      item.call_id = clampResponsesCallId(item.call_id);
-      item.output = coerceResponsesOutput(item.output);
-      return true;
-    }
-    return true;
-  });
 }
 
 function normalizeOpencodeReasoning(model, body) {
@@ -409,9 +323,16 @@ export class OpenCodeExecutor extends BaseExecutor {
       // Free-tier fingerprint tools are required even when an agent client
       // already supplied tools. ZCode/Claude Code requests normally have
       // non-empty tool arrays; skipping cloaking here triggers 403 FreeTierError.
-      applyFingerprintTools(body, true);
+      applyFingerprintTools(body, TOOL_SHAPE.FLAT);
     } else if (body && typeof body === "object") {
-      applyFingerprintTools(body, false);
+      // The fingerprint must match the body's wire shape: `union-alpha` is served
+      // by /inference/anthropic/v1/messages, where chat-shaped tools (missing
+      // input_schema) are rejected outright.
+      const shape =
+        isMessagesModel(model || body.model) || detectToolShape(body) === TOOL_SHAPE.CLAUDE
+          ? TOOL_SHAPE.CLAUDE
+          : TOOL_SHAPE.CHAT;
+      applyFingerprintTools(body, shape);
     }
     return injectReasoningContent({ provider: this.provider, model, body });
   }

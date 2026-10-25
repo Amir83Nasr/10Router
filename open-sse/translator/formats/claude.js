@@ -487,6 +487,31 @@ const CLAUDE_ONLY_BODY_FIELDS = [
   "safeguards",
 ];
 
+/**
+ * Reconcile max_tokens against the thinking budget. applyThinking
+ * (thinkingUnified.js) runs AFTER max_tokens was clamped, and the claude-budget
+ * format maps max effort → budget_tokens 128000 — larger than the clamped
+ * max_tokens. Anthropic requires max_tokens strictly greater than
+ * budget_tokens (else 400). Prefer raising max_tokens to preserve the requested
+ * thinking depth; if the budget alone meets/exceeds the ceiling, cap output and
+ * shrink the budget so some tokens remain for the answer.
+ */
+export function reconcileThinkingBudget(body, ceiling) {
+  if (!body?.max_tokens) return body;
+  if (
+    body.thinking?.type !== "enabled" ||
+    !body.thinking.budget_tokens ||
+    body.thinking.budget_tokens < body.max_tokens
+  ) {
+    return body;
+  }
+  body.max_tokens = Math.min(body.thinking.budget_tokens + 1024, ceiling);
+  if (body.thinking.budget_tokens >= body.max_tokens) {
+    body.thinking.budget_tokens = Math.max(1024, body.max_tokens - 1024);
+  }
+  return body;
+}
+
 export function prepareClaudeRequest(
   body,
   provider = null,
@@ -517,24 +542,7 @@ export function prepareClaudeRequest(
   // conservative 64000 default.
   if (body.max_tokens) {
     if (body.max_tokens > ceiling) body.max_tokens = ceiling;
-
-    // Reconcile against thinking budget. applyThinking (thinkingUnified.js) runs
-    // AFTER adjustMaxTokens capped max_tokens, and the claude-budget format maps
-    // max effort → budget_tokens 128000 — larger than the clamped max_tokens.
-    // Anthropic requires max_tokens strictly greater than budget_tokens (else 400).
-    // Prefer raising max_tokens to preserve the requested thinking depth; if the
-    // budget alone meets/exceeds the ceiling, cap output and shrink the budget so
-    // some tokens remain for the answer.
-    if (
-      body.thinking?.type === "enabled" &&
-      body.thinking.budget_tokens &&
-      body.thinking.budget_tokens >= body.max_tokens
-    ) {
-      body.max_tokens = Math.min(body.thinking.budget_tokens + 1024, ceiling);
-      if (body.thinking.budget_tokens >= body.max_tokens) {
-        body.thinking.budget_tokens = Math.max(1024, body.max_tokens - 1024);
-      }
-    }
+    reconcileThinkingBudget(body, ceiling);
   }
 
   // 1. System: remove all cache_control, add only to last block with ttl 1h

@@ -80,7 +80,18 @@ export function fingerprintToolKey(name) {
   return OPENCODE_FINGERPRINT_TOOLS.includes(trimmed) ? trimmed : "";
 }
 
-/** Read a tool name from either flat ({name}) or chat ({function:{name}}) shape. */
+/**
+ * Tool declaration shapes. The fingerprint must be written in the same shape as
+ * the body it travels in: Claude's Messages API reads `input_schema` and rejects
+ * chat-shaped `function` envelopes outright.
+ */
+export const TOOL_SHAPE = {
+  CHAT: "chat", // {type:"function", function:{name, description, parameters}}
+  FLAT: "flat", // {type:"function", name, description, parameters} (Responses)
+  CLAUDE: "claude", // {name, description, input_schema} (Anthropic Messages)
+};
+
+/** Read a tool name from flat ({name}), chat ({function:{name}}) or Claude shape. */
 function toolNameOf(tool) {
   if (!tool || typeof tool !== "object" || Array.isArray(tool)) return "";
   if (typeof tool.name === "string" && tool.name.trim()) return tool.name.trim();
@@ -96,6 +107,12 @@ function chatFunctionOf(tool) {
   return fn && typeof fn === "object" && !Array.isArray(fn) ? fn : null;
 }
 
+/** Serialized input schema for a tool in any supported shape. */
+function toolSchemaOf(tool) {
+  const def = chatFunctionOf(tool) || tool;
+  return def?.parameters ?? def?.input_schema ?? null;
+}
+
 /** True when `tool` already carries OpenCode's exact definition for `key`. */
 function isFingerprintDefinition(tool, key) {
   const def = tool && (chatFunctionOf(tool) || tool);
@@ -103,8 +120,36 @@ function isFingerprintDefinition(tool, key) {
   return (
     !!def &&
     normalizePlatformSentence(def.description) === want.description &&
-    JSON.stringify(def.parameters) === JSON.stringify(want.parameters)
+    JSON.stringify(toolSchemaOf(tool)) === JSON.stringify(want.parameters)
   );
+}
+
+/** Build one fingerprint tool declaration in the requested shape. */
+function buildFingerprintTool(name, shape) {
+  const { description, parameters } = FINGERPRINT_TOOL_DEFINITIONS[name];
+  if (shape === TOOL_SHAPE.CLAUDE) return { name, description, input_schema: parameters };
+  if (shape === TOOL_SHAPE.FLAT) {
+    return { type: "function", name, description, parameters, strict: false };
+  }
+  return { type: "function", function: { name, description, parameters } };
+}
+
+/** Normalize the legacy boolean argument (true = flat, false = chat). */
+function normalizeShape(shape) {
+  if (shape === TOOL_SHAPE.CLAUDE || shape === TOOL_SHAPE.FLAT || shape === TOOL_SHAPE.CHAT) {
+    return shape;
+  }
+  return shape ? TOOL_SHAPE.FLAT : TOOL_SHAPE.CHAT;
+}
+
+/** Claude bodies declare `system` and `input_schema`; Chat bodies never do. */
+export function detectToolShape(body) {
+  if (!body || typeof body !== "object") return TOOL_SHAPE.CHAT;
+  if (body.system !== undefined) return TOOL_SHAPE.CLAUDE;
+  if (Array.isArray(body.tools) && body.tools.some((tool) => !!tool?.input_schema)) {
+    return TOOL_SHAPE.CLAUDE;
+  }
+  return TOOL_SHAPE.CHAT;
 }
 
 // OpenCode ships the same tool with OS-specific wording: "Commands run on Linux
@@ -188,17 +233,13 @@ export function concealFingerprintToolNames(tools) {
  *
  * @returns {string[]} names that were appended
  */
-export function appendMissingFingerprintTools(tools, flat) {
+export function appendMissingFingerprintTools(tools, shape) {
   const appended = [];
   if (!Array.isArray(tools)) return appended;
+  const resolved = normalizeShape(shape);
   for (const name of OPENCODE_FINGERPRINT_TOOLS) {
     if (tools.some((tool) => fingerprintToolKey(toolNameOf(tool)) === name)) continue;
-    const { description, parameters } = FINGERPRINT_TOOL_DEFINITIONS[name];
-    tools.push(
-      flat
-        ? { type: "function", name, description, parameters, strict: false }
-        : { type: "function", function: { name, description, parameters } },
-    );
+    tools.push(buildFingerprintTool(name, resolved));
     appended.push(name);
   }
   return appended;
@@ -239,7 +280,8 @@ export function aliasHistoryToolCalls(body, map) {
 
   if (Array.isArray(body.input)) {
     body.input = body.input.map((item) =>
-      item?.type === "function_call" && aliases.has(item.name)
+      (item?.type === "function_call" || item?.type === "custom_tool_call") &&
+      aliases.has(item.name)
         ? { ...item, name: aliases.get(item.name) }
         : item,
     );
@@ -247,9 +289,19 @@ export function aliasHistoryToolCalls(body, map) {
 
   if (Array.isArray(body.messages)) {
     body.messages = body.messages.map((msg) => {
-      if (!Array.isArray(msg?.tool_calls)) return msg;
+      // Claude shape: prior tool_use blocks live in the content array.
+      const content = Array.isArray(msg?.content)
+        ? msg.content.map((block) =>
+            block?.type === "tool_use" && aliases.has(block.name)
+              ? { ...block, name: aliases.get(block.name) }
+              : block,
+          )
+        : null;
+      const withContent = content && content !== msg.content ? { ...msg, content } : msg;
+
+      if (!Array.isArray(msg?.tool_calls)) return withContent;
       return {
-        ...msg,
+        ...withContent,
         tool_calls: msg.tool_calls.map((call) =>
           aliases.has(call?.function?.name)
             ? { ...call, function: { ...call.function, name: aliases.get(call.function.name) } }
@@ -265,21 +317,41 @@ export function aliasHistoryToolCalls(body, map) {
 // in the system prompt instead. Upstream does not gate on the prompt text.
 // Wording matters: "not available" made the model also refuse the caller's own
 // Read/Bash; "placeholders ... use the other tools" kept those working.
-function noteUnavailableTools(body, flat, names) {
+function noteUnavailableTools(body, shape, names) {
   const list = names.map((name) => `\`${name}\``).join(" or ");
   const note =
     names.length > 1
       ? `Do not call the ${list} tools; they are placeholders that do nothing. Use the other tools you have been given instead.`
       : `Do not call the ${list} tool; it is a placeholder that does nothing. Use the other tools you have been given instead.`;
-  if (flat) {
+  // Anthropic rejects role "system" inside `messages`; its prompt lives in the
+  // top-level `system` field. A Claude body must never receive the chat note,
+  // even when a caller passed the chat shape.
+  const resolved = detectToolShape(body) === TOOL_SHAPE.CLAUDE ? TOOL_SHAPE.CLAUDE : shape;
+  if (resolved === TOOL_SHAPE.FLAT) {
     body.instructions =
       typeof body.instructions === "string" && body.instructions.trim()
         ? `${body.instructions}\n\n${note}`
         : note;
     return;
   }
-  // OpenAI chat shape only; Claude-shaped bodies carry `system` instead.
-  if (!Array.isArray(body.messages) || body.system !== undefined) return;
+  if (resolved === TOOL_SHAPE.CLAUDE) {
+    // Anthropic carries the prompt in `system`, as a string or text blocks.
+    if (typeof body.system === "string") {
+      body.system = body.system.trim() ? `${body.system}\n\n${note}` : note;
+      return;
+    }
+    if (Array.isArray(body.system) && body.system.length > 0) {
+      const last = body.system[body.system.length - 1];
+      body.system =
+        last?.type === "text"
+          ? [...body.system.slice(0, -1), { ...last, text: `${last.text}\n\n${note}` }]
+          : [...body.system, { type: "text", text: note }];
+      return;
+    }
+    body.system = note;
+    return;
+  }
+  if (!Array.isArray(body.messages)) return;
   const first = body.messages[0];
   if (first?.role === "system" && typeof first.content === "string") {
     body.messages = [
@@ -296,22 +368,24 @@ function noteUnavailableTools(body, flat, names) {
  * fingerprint definitions, and tell the model the appended ones are off-limits.
  *
  * @param {object} body
- * @param {boolean} flat - true for Responses tools ({name}), false for chat tools
+ * @param {string|boolean} shape - TOOL_SHAPE value; `true`/`false` are accepted
+ *   for the Responses and chat shapes respectively
  * @returns {Map<string,string>} map: sent name -> original name
  */
-export function applyFingerprintTools(body, flat) {
+export function applyFingerprintTools(body, shape) {
   if (!body || typeof body !== "object") return new Map();
+  const resolved = normalizeShape(shape === undefined ? detectToolShape(body) : shape);
 
   const { tools, map } = concealFingerprintToolNames(body.tools);
   body.tools = Array.isArray(tools) ? tools : [];
-  const appended = appendMissingFingerprintTools(body.tools, flat);
+  const appended = appendMissingFingerprintTools(body.tools, resolved);
   retargetToolChoice(body, map);
   aliasHistoryToolCalls(body, map);
-  if (appended.length) noteUnavailableTools(body, flat, appended);
+  if (appended.length) noteUnavailableTools(body, resolved, appended);
 
   // Responses keeps its explicit auto default. Never default to "none": upstream
   // answers tool_choice "none" with 403 FreeTierError.
-  if (!body.tool_choice && flat) body.tool_choice = "auto";
+  if (!body.tool_choice && resolved === TOOL_SHAPE.FLAT) body.tool_choice = "auto";
 
   recordRenamedToolNames(body, map);
   return map;

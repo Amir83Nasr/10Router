@@ -11,7 +11,11 @@
 
 import crypto from "node:crypto";
 import { proxyAwareFetch } from "../utils/proxyFetch.js";
-import { DEFAULT_RETRY_CONFIG, resolveRetryEntry } from "../config/runtimeConfig.js";
+import {
+  DEFAULT_RETRY_CONFIG,
+  FETCH_CONNECT_TIMEOUT_MS,
+  resolveRetryEntry,
+} from "../config/runtimeConfig.js";
 
 export const ZED_WEB_BASE_URL = "https://zed.dev";
 export const ZED_CLOUD_BASE_URL = "https://cloud.zed.dev";
@@ -208,20 +212,61 @@ function isTransientNetError(error) {
   return /socket hang up|ECONNRESET|other side closed/i.test(String(error.message || ""));
 }
 
-async function zedFetchWithRetry(url, options, proxyOptions = null, statusKey = 502) {
+// Abort an upstream call whose response headers never arrive. A hung socket
+// otherwise blocks the request until the client gives up (Zed rides the same
+// BaseExecutor pipeline, whose executors all bound the connect phase).
+function withConnectTimeout(options, connectTimeoutMs) {
+  const { signal, ...rest } = options || {};
+  const timeoutCtrl = new AbortController();
+  const timer = setTimeout(
+    () => timeoutCtrl.abort(new Error("fetch connect timeout")),
+    connectTimeoutMs,
+  );
+  const merged = signal ? AbortSignal.any([signal, timeoutCtrl.signal]) : timeoutCtrl.signal;
+  return {
+    options: { ...rest, signal: merged },
+    clear: () => clearTimeout(timer),
+    timedOut: () => timeoutCtrl.signal.aborted,
+  };
+}
+
+async function zedFetchWithRetry(
+  url,
+  options,
+  proxyOptions = null,
+  { statusKey = 502, connectTimeoutMs = FETCH_CONNECT_TIMEOUT_MS } = {},
+) {
   const { attempts, delayMs } = resolveRetryEntry(DEFAULT_RETRY_CONFIG[statusKey]);
   for (let attempt = 0; ; attempt++) {
+    const attemptOptions = withConnectTimeout(options, connectTimeoutMs);
     try {
-      return await proxyAwareFetch(url, options, proxyOptions);
+      return await proxyAwareFetch(url, attemptOptions.options, proxyOptions);
     } catch (error) {
+      // A connect timeout is an internal deadline, not a caller abort: treat it
+      // like a transient socket failure so the retry/fallback path can act.
+      if (attemptOptions.timedOut()) {
+        if (attempt >= attempts) {
+          throw new Error(`Zed request timed out after ${connectTimeoutMs}ms (no response)`);
+        }
+        await sleep(delayMs);
+        continue;
+      }
       if (!isTransientNetError(error) || attempt >= attempts) throw error;
       await sleep(delayMs);
+    } finally {
+      attemptOptions.clear();
     }
   }
 }
 
-async function fetchJson(url, options, proxyOptions = null) {
-  const res = await zedFetchWithRetry(url, options, proxyOptions);
+/** Only override the connect deadline when the caller set one (a bare
+ * `undefined` would reach setTimeout and fire immediately). */
+function timeoutOption(connectTimeoutMs) {
+  return connectTimeoutMs == null ? {} : { connectTimeoutMs };
+}
+
+async function fetchJson(url, options, proxyOptions = null, timeouts = {}) {
+  const res = await zedFetchWithRetry(url, options, proxyOptions, timeouts);
   const text = await res.text();
   let data = null;
   if (text) {
@@ -259,6 +304,7 @@ export async function fetchZedAuthenticatedUser(credentials, options = {}) {
       signal: options.signal ?? undefined,
     },
     options.proxyOptions ?? null,
+    timeoutOption(options.connectTimeoutMs),
   );
 }
 
@@ -329,6 +375,7 @@ export async function fetchZedLlmToken(credentials, options = {}) {
       signal: options.signal ?? undefined,
     },
     options.proxyOptions ?? null,
+    timeoutOption(options.connectTimeoutMs),
   );
   const token =
     typeof data?.token === "string" ? data.token : data?.token?.[0] || data?.token?.value;
@@ -361,6 +408,7 @@ export async function zedLlmFetch(credentials, path, options = {}) {
         signal: options.signal ?? undefined,
       },
       options.proxyOptions ?? null,
+      { connectTimeoutMs: options.connectTimeoutMs },
     );
   };
 

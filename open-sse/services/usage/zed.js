@@ -125,11 +125,24 @@ export function parseZedAuthenticatedUserUsage(userInfo) {
   const usage = plan.usage || {};
 
   const editPredictions = usage.edit_predictions || usage.editPredictions;
-  if (editPredictions) {
+  // `{ limited: 0 }` is the token-billed shape, not a zero-cap quota. Emitting a
+  // 0%-remaining row here made the auth pre-filter skip the connection for the
+  // whole billing cycle even though nothing was exhausted.
+  const editPredictionsLimitInfo = editPredictions
+    ? parseZedUsageLimit(
+        editPredictions.limit != null
+          ? editPredictions.limit
+          : usageBucketLimit(editPredictions)?.limit,
+      )
+    : null;
+  const hasEditPredictionsQuota =
+    !!editPredictionsLimitInfo &&
+    (editPredictionsLimitInfo.unlimited || editPredictionsLimitInfo.total > 0);
+  if (hasEditPredictionsQuota) {
     quotas["Edit Predictions"] = makeZedQuotaRow(
       "Edit Predictions",
       editPredictions.used,
-      editPredictions.limit,
+      editPredictions.limit ?? usageBucketLimit(editPredictions)?.limit,
       resetAt,
     );
   }
@@ -155,7 +168,9 @@ export function parseZedAuthenticatedUserUsage(userInfo) {
     isZedTokenBillingModelRequestsLimit(
       modelRequests.limit ?? usageBucketLimit(modelRequests)?.limit,
     )
-      ? "Hosted AI models are billed per token (not request count). Edit Predictions are tracked below. Token spend is on dashboard.zed.dev."
+      ? hasEditPredictionsQuota
+        ? "Hosted AI models are billed per token (not request count). Edit Predictions are tracked below. Token spend is on dashboard.zed.dev."
+        : "Hosted AI models are billed per token (not request count). Token spend is on dashboard.zed.dev."
       : null;
 
   let planLabel = formatZedPlanLabel(planId);

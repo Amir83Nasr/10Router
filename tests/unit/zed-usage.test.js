@@ -103,6 +103,40 @@ describe("parseZedAuthenticatedUserUsage", () => {
     expect(parsed.message).toMatch(/dashboard\.zed\.dev/);
   });
 
+  it("skips a token-billed {limited:0} edit_predictions limit instead of a 0% row", () => {
+    const parsed = parseZedAuthenticatedUserUsage({
+      plan: {
+        plan_v3: "zed_pro",
+        usage: {
+          edit_predictions: { used: 0, limit: { limited: 0 } },
+          model_requests: { used: 5, limit: 100 },
+        },
+      },
+    });
+
+    // A 0%-remaining row makes the auth pre-filter skip the connection for the
+    // whole billing cycle even though nothing is exhausted.
+    expect(parsed.quotas["Edit Predictions"]).toBeUndefined();
+    expect(parsed.quotas["Hosted Model Requests"]).toBeDefined();
+    expect(parsed.message ?? "").not.toMatch(/Edit Predictions/);
+  });
+
+  it("keeps the token-billing note free of an Edit Predictions row that is absent", () => {
+    const parsed = parseZedAuthenticatedUserUsage({
+      plan: {
+        plan_v3: "zed_pro",
+        usage: {
+          edit_predictions: { used: 0, limit: { limited: 0 } },
+          model_requests: { used: 0, limit: { limited: 0 } },
+        },
+      },
+    });
+
+    expect(parsed.quotas["Edit Predictions"]).toBeUndefined();
+    expect(parsed.message).toMatch(/token/i);
+    expect(parsed.message).not.toMatch(/Edit Predictions are tracked below/);
+  });
+
   it("surfaces overdue invoice warning", () => {
     const parsed = parseZedAuthenticatedUserUsage({
       plan: {

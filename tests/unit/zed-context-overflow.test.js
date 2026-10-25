@@ -113,8 +113,8 @@ describe("pre-send context guard", () => {
   });
 });
 
-describe("in-stream status:failed overflow", () => {
-  it("emits an error frame + DONE, never assistant text", async () => {
+describe("failure as the first stream frame", () => {
+  it("answers an overflow status:failed frame with a real 400, never assistant text", async () => {
     resolveZedModels.mockResolvedValue(
       catalogFor([["m", { provider: "anthropic", max_token_count: 100000 }]]),
     );
@@ -133,14 +133,15 @@ describe("in-stream status:failed overflow", () => {
       credentials: {},
       log: {},
     });
-    const text = await streamText(response);
-    expect(text).toContain('"code":"context_length_exceeded"');
-    expect(text).toContain("data: [DONE]");
-    expect(text).not.toContain("[Zed error]");
-    expect(text).not.toContain('"delta"');
+    // Peeked before committing to HTTP 200, so the fallback layer sees a real
+    // status: overflow is request-scoped (400, no account cooldown).
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error.code).toBe("context_length_exceeded");
+    expect(body.error.message).toMatch(/Shorten the conversation/);
   });
 
-  it("keeps non-overflow failures as assistant-text error chunks (no behavior change)", async () => {
+  it("answers any other first-frame failure with 502 JSON", async () => {
     resolveZedModels.mockResolvedValue(
       catalogFor([["m", { provider: "anthropic", max_token_count: 100000 }]]),
     );
@@ -156,8 +157,140 @@ describe("in-stream status:failed overflow", () => {
       credentials: {},
       log: {},
     });
+    expect(response.status).toBe(502);
+    const body = await response.json();
+    expect(body.error.message).toBe("upstream boom");
+    expect(body.error.code).toBe("upstream_error");
+  });
+
+  it("maps a quota failure to 429 so the account fallback cools it down", async () => {
+    resolveZedModels.mockResolvedValue(
+      catalogFor([["m", { provider: "anthropic", max_token_count: 100000 }]]),
+    );
+    const { zedLlmFetch } = await import("open-sse/shared/zedAuth.js");
+    zedLlmFetch.mockImplementation(async () =>
+      Response.json(
+        {
+          status: {
+            failed: { message: "rate limit reached for this account", code: "rate_limit" },
+          },
+        },
+        { status: 200 },
+      ),
+    );
+    const executor = makeExecutor();
+    const { response } = await executor.execute({
+      model: "m",
+      body: { messages: [{ role: "user", content: "hi" }] },
+      stream: true,
+      credentials: {},
+      log: {},
+    });
+    expect(response.status).toBe(429);
+  });
+
+  it("treats a non-JSON first frame as an upstream gateway error", async () => {
+    resolveZedModels.mockResolvedValue(
+      catalogFor([["m", { provider: "anthropic", max_token_count: 100000 }]]),
+    );
+    const { zedLlmFetch } = await import("open-sse/shared/zedAuth.js");
+    zedLlmFetch.mockImplementation(
+      async () => new Response("<html>bad gateway</html>\n", { status: 200 }),
+    );
+    const executor = makeExecutor();
+    const { response } = await executor.execute({
+      model: "m",
+      body: { messages: [{ role: "user", content: "hi" }] },
+      stream: true,
+      credentials: {},
+      log: {},
+    });
+    expect(response.status).toBe(502);
+    const body = await response.json();
+    expect(body.error.code).toBe("invalid_stream_frame");
+  });
+});
+
+describe("failure after the stream has started", () => {
+  const CONTENT_FRAME = JSON.stringify({
+    event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "hi" } },
+  });
+
+  it("emits an error frame + DONE without faking assistant text", async () => {
+    resolveZedModels.mockResolvedValue(
+      catalogFor([["m", { provider: "anthropic", max_token_count: 100000 }]]),
+    );
+    const { zedLlmFetch } = await import("open-sse/shared/zedAuth.js");
+    zedLlmFetch.mockImplementation(
+      async () =>
+        new Response(`${CONTENT_FRAME}\n{"status":{"failed":{"message":"upstream boom"}}}\n`, {
+          status: 200,
+        }),
+    );
+    const executor = makeExecutor();
+    const { response } = await executor.execute({
+      model: "m",
+      body: { messages: [{ role: "user", content: "hi" }] },
+      stream: true,
+      credentials: {},
+      log: {},
+    });
+    // A payload frame already arrived, so the response is committed to 200.
+    expect(response.status).toBe(200);
     const text = await streamText(response);
-    expect(text).toContain("[Zed error] upstream boom");
+    expect(text).toContain('"content":"hi"');
+    expect(text).toContain('"message":"upstream boom"');
+    expect(text).toContain('"code":"upstream_error"');
+    expect(text).toContain("data: [DONE]");
+    expect(text).not.toContain("[Zed error]");
+  });
+
+  it("surfaces a typed provider error frame instead of dropping it", async () => {
+    resolveZedModels.mockResolvedValue(
+      catalogFor([["m", { provider: "anthropic", max_token_count: 100000 }]]),
+    );
+    const { zedLlmFetch } = await import("open-sse/shared/zedAuth.js");
+    zedLlmFetch.mockImplementation(
+      async () =>
+        new Response(
+          `${CONTENT_FRAME}\n{"event":{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}}\n`,
+          { status: 200 },
+        ),
+    );
+    const executor = makeExecutor();
+    const { response } = await executor.execute({
+      model: "m",
+      body: { messages: [{ role: "user", content: "hi" }] },
+      stream: true,
+      credentials: {},
+      log: {},
+    });
+    const text = await streamText(response);
+    expect(text).toContain('"message":"Overloaded"');
+    expect(text).toContain('"status":503');
+    expect(text).toContain("data: [DONE]");
+    expect(text).not.toContain("[Zed error]");
+  });
+
+  it("synthesizes a finish chunk when the stream ends without one", async () => {
+    resolveZedModels.mockResolvedValue(
+      catalogFor([["m", { provider: "anthropic", max_token_count: 100000 }]]),
+    );
+    const { zedLlmFetch } = await import("open-sse/shared/zedAuth.js");
+    zedLlmFetch.mockImplementation(
+      async () => new Response(`${CONTENT_FRAME}\ndata: [DONE]\n`, { status: 200 }),
+    );
+    const executor = makeExecutor();
+    const { response } = await executor.execute({
+      model: "m",
+      body: { messages: [{ role: "user", content: "hi" }] },
+      stream: true,
+      credentials: {},
+      log: {},
+    });
+    const text = await streamText(response);
+    expect(text).toContain('"finish_reason":"stop"');
+    expect(text).toContain("data: [DONE]");
   });
 });
 

@@ -26,6 +26,14 @@ import { openaiResponsesToOpenAIResponse } from "../translator/response/openai-r
 import { ZED_HEADERS, resolveZedModels, zedLlmFetch } from "../shared/zedAuth.js";
 import { estimateInputTokens } from "../utils/usageTracking.js";
 import { stripHistoryForContext } from "../services/capacityAdapter.js";
+import {
+  stripThinkingSuffix,
+  extractThinking,
+  applyThinking,
+} from "../translator/concerns/thinkingUnified.js";
+import { reconcileThinkingBudget } from "../translator/formats/claude.js";
+import { DEFAULT_MAX_TOKENS } from "../config/runtimeConfig.js";
+import { getCapabilitiesForModel } from "../providers/capabilities.js";
 
 // Wire values for the `provider` field of POST /completions. These are NOT
 // display names: cloud.zed.dev matches them exactly, and an unrecognized value
@@ -55,9 +63,51 @@ function normalizeZedProvider(value, model) {
   return ZED_PROVIDER.openai;
 }
 
-function buildProviderRequest(provider, model, body, stream, credentials) {
+// The shared Claude translator copies sampling fields only — thinking intent is
+// applied later by the translator pipeline, against the executor's target
+// format. Zed's Claude path bypasses that pipeline, so `model(high)` and
+// reasoning_effort used to be dropped with no error.
+//
+// `model` keeps the client's thinking suffix here: applyThinking parses it into
+// the budget/level override, and the cleaned id is only used on the wire.
+function applyZedThinking(claudeRequest, sourceBody, model, raw, log) {
+  if (!raw?.supports_thinking) {
+    const intent = extractThinking(sourceBody);
+    if (intent && intent.mode !== "none") {
+      log?.warn?.(
+        "ZED",
+        `${stripThinkingSuffix(model)} does not support thinking — requested depth omitted`,
+      );
+    }
+    return claudeRequest;
+  }
+  // No early return on a missing intent: the depth may come from the model
+  // suffix alone (`claude-sonnet-4.5(high)`) with no body field to extract.
+  applyThinking(FORMATS.CLAUDE, model, claudeRequest, "zed", extractThinking(sourceBody));
+  const ceiling =
+    Number(raw?.max_output_tokens ?? raw?.maxOutputTokens) ||
+    getCapabilitiesForModel("zed", stripThinkingSuffix(model)).maxOutput ||
+    DEFAULT_MAX_TOKENS;
+  // The shared translator clamps against provider capabilities, not Zed's live
+  // catalog, so a model whose real ceiling is lower would still 400 upstream.
+  if (claudeRequest.max_tokens) {
+    claudeRequest.max_tokens = Math.min(claudeRequest.max_tokens, ceiling);
+  }
+  return reconcileThinkingBudget(claudeRequest, ceiling);
+}
+
+function buildProviderRequest(
+  provider,
+  model,
+  body,
+  stream,
+  credentials,
+  raw = null,
+  { log = null, sourceModel = model } = {},
+) {
   if (provider === ZED_PROVIDER.anthropic) {
-    return openaiToClaudeRequest(model, body, true);
+    const claudeRequest = openaiToClaudeRequest(model, body, true);
+    return applyZedThinking(claudeRequest, body, sourceModel, raw, log);
   }
   if (provider === ZED_PROVIDER.google) {
     const geminiRequest = openaiToGeminiRequest(model, body, true);
@@ -92,14 +142,85 @@ function convertProviderEvent(provider, event, state) {
   return event;
 }
 
-function createErrorChunk(model, message) {
+// A stream that ends without a terminal frame leaves non-streaming aggregation
+// (parseSSEToOpenAIResponse) with a finish_reason-less answer and streaming
+// clients waiting for a terminator, so close it explicitly.
+function createFinishChunk(model) {
   return {
-    id: `chatcmpl-zed-error-${Date.now()}`,
+    id: `chatcmpl-zed-${Date.now()}`,
     object: "chat.completion.chunk",
     created: Math.floor(Date.now() / 1000),
     model,
-    choices: [{ index: 0, delta: { content: `[Zed error] ${message}` }, finish_reason: "stop" }],
+    choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
   };
+}
+
+function errorMessageOf(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value !== "object") return String(value);
+  const nested = value.error && typeof value.error === "object" ? value.error.message : value.error;
+  return String(value.message || value.detail || nested || value.code || value.type || "");
+}
+
+/**
+ * Provider error carried inside a stream frame, or null.
+ *
+ * Zed forwards the upstream body untouched, so a failure can arrive as an
+ * Anthropic `{"type":"error","error":{…}}`, an OpenAI `{"error":{…}}`, or a
+ * Responses `response.failed`. The response translators have no case for any of
+ * them: passing one through would silently drop the failure.
+ */
+function frameErrorOf(event) {
+  if (!event || typeof event !== "object" || Array.isArray(event)) return null;
+  if (event.type === "error") {
+    return {
+      message: errorMessageOf(event.error) || errorMessageOf(event) || "upstream error",
+      code: String(event.error?.code || event.code || "upstream_error"),
+    };
+  }
+  if (event.type === "response.failed") {
+    const failed = event.response || event;
+    return {
+      message: errorMessageOf(failed) || "upstream response failed",
+      code: String(failed.error?.code || failed.code || "response_failed"),
+    };
+  }
+  // Bare `{"error": {…}}` envelope. A normal payload always carries at least one
+  // of choices / candidates / output, so those exclude a legitimate `error: null`.
+  if (event.error && !event.choices && !event.candidates && !event.output) {
+    return {
+      message: errorMessageOf(event.error) || "upstream error",
+      code: String(event.error?.code || event.error?.type || "upstream_error"),
+    };
+  }
+  return null;
+}
+
+// HTTP status for an in-band failure, so the fallback layer reacts the way it
+// would to the equivalent HTTP error (quota cools down, overflow is request-scoped).
+function statusForStreamError(message, code = "") {
+  const text = `${code} ${message}`;
+  if (isContextOverflowText(text)) return 400;
+  if (/rate.?limit|quota|too many requests|tokens per (minute|day)/i.test(text)) return 429;
+  if (/overloaded|unavailable|try again/i.test(text)) return 503;
+  return 502;
+}
+
+// In-band error frame in the shared buildErrorBody shape. Clients aggregate
+// delta.content into the answer and non-streaming aggregation keys off
+// chunk.error, so a failure must travel as an error — never as assistant text.
+function createErrorFrame(message, status, code) {
+  const type = status === 400 ? "invalid_request_error" : "upstream_error";
+  return `data: ${JSON.stringify({ error: { message, type, code, status } })}\n\n`;
+}
+
+function createErrorResponse(message, status, code) {
+  const type = status === 400 ? "invalid_request_error" : "upstream_error";
+  return new Response(JSON.stringify({ error: { message, type, code, status } }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 function enqueueSseObject(controller, encoder, chunk) {
@@ -151,32 +272,115 @@ function isContextOverflowText(value) {
   return OVERFLOW_RE.test(String(value || ""));
 }
 
-// SSE error frame in the shared buildErrorBody shape ({error:{message,type,
-// code}}) so stream aggregation and clients treat it as a failure, not as
-// assistant text. Never a fabricated finish_reason.
-function createOverflowErrorFrame(message) {
-  return `data: ${JSON.stringify({
-    error: {
-      message,
-      type: "invalid_request_error",
-      code: "context_length_exceeded",
-    },
-  })}\n\n`;
+function statusFailureOf(status) {
+  if (!status) return null;
+  if (status.type === "failed" || status.failed) {
+    const failed = status.failed || status;
+    const message = String(failed.message || failed.error || failed.code || "request failed");
+    const code = String(failed.code || failed.error?.code || "");
+    return { message, ...failureDetails(message, code) };
+  }
+  return null;
 }
 
-function wrapZedCompletionStream(response, provider, model) {
+function failureDetails(message, code) {
+  const status = statusForStreamError(message, code);
+  if (status !== 400) return { status, code: code || "upstream_error" };
+  return {
+    status,
+    code: "context_length_exceeded",
+    message:
+      `Context window exceeded: ${message}. ` + `Shorten the conversation or use a larger model.`,
+  };
+}
+
+/**
+ * Read up to the first real payload frame so an immediate failure can still be
+ * answered with a real HTTP status (account fallback, non-streaming clients,
+ * correct status codes) instead of an HTTP-200 stream that fails silently.
+ * `consumed` holds every byte read — the caller replays it, so nothing is lost.
+ */
+async function peekZedStream(reader, decoder) {
+  let consumed = "";
+  let offset = 0;
+  let upstreamDone = false;
+
+  while (true) {
+    let nl = consumed.indexOf("\n", offset);
+    if (nl === -1 && !upstreamDone) {
+      const { done, value } = await reader.read();
+      upstreamDone = done;
+      consumed += done ? decoder.decode() : decoder.decode(value, { stream: true });
+      continue;
+    }
+    if (offset >= consumed.length) return { failure: null, consumed, upstreamDone };
+    if (nl === -1) nl = consumed.length;
+
+    const line = consumed.slice(offset, nl).replace(/\r$/, "").trim();
+    offset = nl + 1;
+    if (!line || line.startsWith(":")) continue;
+
+    const payload = unwrapZedLine(line);
+    if (!payload) {
+      // Not a JSON frame: an HTML/text error page (proxy, gateway) rather than a
+      // provider chunk. Surface it instead of streaming garbage to the client.
+      return {
+        failure: {
+          message: `Zed returned a non-JSON stream frame: ${line.slice(0, 200)}`,
+          status: 502,
+          code: "invalid_stream_frame",
+        },
+        consumed,
+        upstreamDone,
+      };
+    }
+    if (payload.done) return { failure: null, consumed, upstreamDone };
+    if (payload.status) {
+      const failure = statusFailureOf(normalizeStatus(payload.status));
+      if (failure) return { failure, consumed, upstreamDone };
+      continue; // status-only frames (started, …) carry no payload
+    }
+    const frameError = frameErrorOf(payload.event);
+    return {
+      failure: frameError
+        ? { ...frameError, ...failureDetails(frameError.message, frameError.code) }
+        : null,
+      consumed,
+      upstreamDone,
+    };
+  }
+}
+
+async function wrapZedCompletionStream(response, provider, model) {
   if (!response.ok || !response.body) return response;
 
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
+  const reader = response.body.getReader();
+
+  const peek = await peekZedStream(reader, decoder);
+  if (peek.failure) {
+    await reader.cancel().catch(() => {});
+    return createErrorResponse(peek.failure.message, peek.failure.status, peek.failure.code);
+  }
+
   const state = initProviderState(provider, model);
-  let buffer = "";
+  let buffer = peek.consumed;
   let done = false;
+  let emittedFinish = false;
 
   const finish = (controller) => {
     if (done) return;
-    const finalChunk = convertProviderEvent(provider, null, state);
-    enqueueSseObject(controller, encoder, finalChunk);
+    enqueueSseObject(controller, encoder, convertProviderEvent(provider, null, state));
+    if (!emittedFinish) enqueueSseObject(controller, encoder, createFinishChunk(model));
+    controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+    done = true;
+  };
+
+  const abort = (controller, failure) => {
+    controller.enqueue(
+      encoder.encode(createErrorFrame(failure.message, failure.status, failure.code)),
+    );
     controller.enqueue(encoder.encode("data: [DONE]\n\n"));
     done = true;
   };
@@ -191,57 +395,76 @@ function wrapZedCompletionStream(response, provider, model) {
     }
     if (payload.status) {
       const status = normalizeStatus(payload.status);
-      if (status?.type === "failed" || status?.failed) {
-        const failed = status.failed || status;
-        const message = String(failed.message || failed.error || failed.code || "request failed");
-        // Context overflow must be a clean error, not assistant text:
-        // clients aggregate delta.content into the answer, and the fallback
-        // layer keys off status — so emit the error frame + [DONE] with no
-        // fabricated finish_reason, and skip the trailing translate flush.
-        if (isContextOverflowText(message)) {
-          controller.enqueue(
-            encoder.encode(
-              createOverflowErrorFrame(
-                `Context window exceeded for ${model}: ${message}. ` +
-                  `Shorten the conversation or use a larger model.`,
-              ) + "data: [DONE]\n\n",
-            ),
-          );
-          done = true;
-        } else {
-          enqueueSseObject(controller, encoder, createErrorChunk(model, message));
-          finish(controller);
-        }
-      } else if (status?.type === "stream_ended" || status === "stream_ended") {
-        finish(controller);
-      }
+      const failure = statusFailureOf(status);
+      if (failure) abort(controller, failure);
+      else if (status?.type === "stream_ended" || status === "stream_ended") finish(controller);
+      return;
+    }
+    const frameError = frameErrorOf(payload.event);
+    if (frameError) {
+      abort(controller, { ...frameError, ...failureDetails(frameError.message, frameError.code) });
       return;
     }
     const converted = convertProviderEvent(provider, payload.event, state);
+    for (const item of Array.isArray(converted) ? converted : [converted]) {
+      if (item?.choices?.some((choice) => choice?.finish_reason)) emittedFinish = true;
+    }
     enqueueSseObject(controller, encoder, converted);
   };
 
-  const transformed = response.body.pipeThrough(
-    new TransformStream({
-      transform(chunk, controller) {
-        buffer += decoder.decode(chunk, { stream: true });
-        let nl;
-        while ((nl = buffer.indexOf("\n")) !== -1) {
-          const line = buffer.slice(0, nl);
-          buffer = buffer.slice(nl + 1);
-          processLine(line, controller);
+  const transformed = new ReadableStream({
+    async start(controller) {
+      try {
+        while (!done) {
+          let nl;
+          while ((nl = buffer.indexOf("\n")) !== -1) {
+            const line = buffer.slice(0, nl);
+            buffer = buffer.slice(nl + 1);
+            processLine(line, controller);
+            if (done) break;
+          }
+          if (done) break;
+          const { done: upstreamDone, value } = await reader.read();
+          if (upstreamDone) {
+            buffer += decoder.decode();
+            if (buffer) {
+              processLine(buffer, controller);
+              buffer = "";
+            }
+            break;
+          }
+          buffer += decoder.decode(value, { stream: true });
         }
-      },
-      flush(controller) {
-        buffer += decoder.decode();
-        if (buffer) {
-          processLine(buffer, controller);
-          buffer = "";
+      } catch (error) {
+        if (!done) {
+          abort(controller, {
+            message: `Zed stream failed: ${error?.message || error}`,
+            status: 502,
+            code: "stream_failed",
+          });
         }
-        finish(controller);
-      },
-    }),
-  );
+      } finally {
+        await Promise.resolve()
+          .then(() => reader.cancel())
+          .catch(() => {});
+        if (!done) {
+          try {
+            finish(controller);
+          } catch {
+            /* controller already closed */
+          }
+        }
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
+      }
+    },
+    cancel(reason) {
+      return reader.cancel(reason).catch(() => {});
+    },
+  });
 
   return new Response(transformed, {
     status: response.status,
@@ -284,8 +507,12 @@ class ZedExecutor extends BaseExecutor {
   }
 
   async execute({ model, body, stream, credentials, signal, log, proxyOptions = null }) {
+    // chatCore forwards the client's thinking suffix (`model(high)`) so translators
+    // can read it, but the upstream model id must never carry it: it breaks the
+    // catalog lookup (and with it the context guard) and Zed rejects it.
+    const upstreamModel = stripThinkingSuffix(model);
     const { raw, provider } = await this.resolveModel(
-      model,
+      upstreamModel,
       credentials,
       signal,
       log,
@@ -302,7 +529,7 @@ class ZedExecutor extends BaseExecutor {
       if (estimateInputTokens(requestBody) > contextLimit) {
         const trimmed = stripHistoryForContext(requestBody, contextLimit);
         if (trimmed !== requestBody) {
-          log?.info?.("ZED", `trimmed history for ${model} to fit ${contextLimit} tokens`);
+          log?.info?.("ZED", `trimmed history for ${upstreamModel} to fit ${contextLimit} tokens`);
           requestBody = trimmed;
         }
       }
@@ -310,7 +537,7 @@ class ZedExecutor extends BaseExecutor {
       if (estimated > contextLimit) {
         const message =
           `Context window exceeded: ~${estimated} tokens exceeds the limit of ` +
-          `${contextLimit} tokens for ${model}. Shorten the conversation or use a larger model.`;
+          `${contextLimit} tokens for ${upstreamModel}. Shorten the conversation or use a larger model.`;
         return {
           response: new Response(
             JSON.stringify({
@@ -324,17 +551,25 @@ class ZedExecutor extends BaseExecutor {
           ),
           url: `${this.config?.llmBaseUrl || "https://cloud.zed.dev"}/completions`,
           headers: { "Content-Type": "application/json", Authorization: "Bearer <zed-llm-token>" },
-          transformedBody: { model, estimatedInputTokens: estimated, contextLimit },
+          transformedBody: { model: upstreamModel, estimatedInputTokens: estimated, contextLimit },
         };
       }
     }
-    const providerRequest = buildProviderRequest(provider, model, requestBody, stream, credentials);
+    const providerRequest = buildProviderRequest(
+      provider,
+      upstreamModel,
+      requestBody,
+      stream,
+      credentials,
+      raw,
+      { log, sourceModel: model },
+    );
     const bodyRecord = requestBody;
     const payload = {
       thread_id: bodyRecord.thread_id || credentials?._clientSessionId,
       prompt_id: bodyRecord.prompt_id,
       provider,
-      model,
+      model: upstreamModel,
       provider_request: providerRequest,
     };
 
@@ -356,7 +591,9 @@ class ZedExecutor extends BaseExecutor {
       },
     });
 
-    const wrapped = response.ok ? wrapZedCompletionStream(response, provider, model) : response;
+    const wrapped = response.ok
+      ? await wrapZedCompletionStream(response, provider, upstreamModel)
+      : response;
     return {
       response: wrapped,
       url: `${this.config?.llmBaseUrl || "https://cloud.zed.dev"}/completions`,

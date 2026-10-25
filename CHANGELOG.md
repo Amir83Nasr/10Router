@@ -2,6 +2,15 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.16] — 2026-10-26
+
+- Removed the fish-audio, glm-cn, groq, huggingface, minimax, minimax-cn, siliconflow, vercel-ai-gateway, xiaomi-tokenplan and xquik providers: registry entries, executors, usage, TTS and image handlers, logos and their tests are gone.
+- Added an OpenCode Go connection probe and a dashboard connection card that checks every Go wire format (`open-sse/services/opencodeGoProbe.js`, `open-sse/config/opencodeGo.js`).
+- Fix: OpenCode Go, Zen and System One use the v2 inference paths; free-tier entitlement errors are surfaced instead of cooling accounts.
+- Fix: Zed and OpenCode keep thinking blocks, surface stream failures and preserve custom tools.
+- Fix: reasoning tokens are folded into the completion count for usage, and the OAuth route is force-dynamic.
+- Dashboard: console logs are surfaced in the sidebar, and the disable toggle is removed from provider cards.
+
 ## [0.1.15] — 2026-10-21
 
 - Fix: a non-streaming `/v1/messages` request routed to a provider that only streams came back as an OpenAI `chat.completion` body when the upstream spoke Anthropic on the wire. Claude Code reads `message.content[]` and threw, which auto mode reported as "classifier unavailable". Both the forced-stream and the non-streaming paths now aggregate Claude-dialect SSE with `parseClaudeSSEToMessage` (`open-sse/handlers/chatCore/claudeMessageBody.js`); the chat parser stays for chat-native upstreams and each path falls back to the other when no Anthropic event was seen.

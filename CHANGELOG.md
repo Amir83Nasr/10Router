@@ -2,6 +2,13 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.17] — 2026-10-26
+
+- Fix: OpenCode Go routed each model to the provider's default endpoint instead of one it actually serves. An OpenAI-format client asking for a claude-only model (`claude-haiku-5-5`, `minimax-m2.7`) was sent to `/chat/completions` and rejected upstream with `ModelProtocolUnsupported`; `chatCore` and the tests now share `resolveModelTransport` (`open-sse/services/provider.js`), which prefers the sourceFormat-matched endpoint (no translation) and otherwise a model-declared one.
+- OpenCode Go transports are ordered `claude → openai → openai-responses → gemini`, so the fallback prefers Anthropic Messages, which is what Claude Code traffic uses.
+- OpenCode Go `supportedFormats` re-verified against the live endpoints (the published table is stale): `kimi-k3`, `kimi-k3.1-pro`, `minimax-m3` and `deepseek-v4.1-flash` also answer on `/messages`, most chat models also answer `/responses`, and `minimax-m2.7` is Messages-only. Models disabled in an account's console read as unavailable, so only `ModelProtocolUnsupported` narrows a model's formats.
+- Added the documented `step-5-preview` and `beam-free` models, plus `gemini-4-argon` on the Google wire: the executor builds the model-scoped `/{model}:generateContent` URL and authenticates with `x-goog-api-key`.
+
 ## [0.1.16] — 2026-10-26
 
 - Removed the fish-audio, glm-cn, groq, huggingface, minimax, minimax-cn, siliconflow, vercel-ai-gateway, xiaomi-tokenplan and xquik providers: registry entries, executors, usage, TTS and image handlers, logos and their tests are gone.

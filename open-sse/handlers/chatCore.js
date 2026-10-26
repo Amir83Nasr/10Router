@@ -1,4 +1,4 @@
-import { detectFormat, getTargetFormat, resolveTransport } from "../services/provider.js";
+import { detectFormat, getTargetFormat, resolveModelTransport } from "../services/provider.js";
 import { translateRequest } from "../translator/index.js";
 import {
   applyThinking,
@@ -138,20 +138,13 @@ export async function handleChatCore({
   const alias = PROVIDER_ID_TO_ALIAS[provider] || provider;
   const modelTargetFormat = getModelTargetFormat(alias, model);
   // Multi-endpoint providers: pick transport matching sourceFormat → zero translation.
-  // Per-model guard: only use the transport when the model declares support for that
-  // sourceFormat — opencode-go models differ in endpoint support (kimi/glm only do
-  // /chat/completions), so without this guard a claude-format request would wrongly
-  // route kimi to /messages.
+  // Guarded per model: opencode-go models differ in endpoint support, so a
+  // claude-format request must not go to /messages for kimi/glm and an OpenAI one
+  // must not go to /chat/completions for claude-haiku-5-5 (upstream answers
+  // ModelProtocolUnsupported). When the client format has no endpoint, the model's
+  // preferred declared endpoint is used and translation handles the wire change.
   const modelSupportedFormats = getModelSupportedFormats(alias, model);
-  const runtimeTransport = resolveTransport(provider, sourceFormat);
-  // Per-model guard: when a model declares supportedFormats, only use the
-  // sourceFormat-matched transport if that format is declared (opencode-go models
-  // differ — kimi/glm only do /chat/completions). Undeclared models keep the
-  // upstream default (use the transport), preserving behavior for glm/deepseek/...
-  const useTransport =
-    !modelSupportedFormats || modelSupportedFormats.includes(sourceFormat)
-      ? runtimeTransport
-      : null;
+  const useTransport = resolveModelTransport(provider, sourceFormat, modelSupportedFormats);
   // A source-format-matched endpoint keeps the request lossless. Prefer it
   // over a model-level targetFormat, which is only the fallback for clients
   // whose wire format has no supported transport (for example MiniMax-M3:

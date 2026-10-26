@@ -158,6 +158,33 @@ export function resolveTransport(provider, sourceFormat) {
   return transports.find((t) => t.format === sourceFormat) || null;
 }
 
+// Fallback transport for a multi-endpoint provider when the client's wire format
+// has no endpoint on this model (per-model `supportedFormats`). Without it the
+// request would go to the provider's default URL and upstream would answer
+// ModelProtocolUnsupported (opencode-go: claude-haiku-5-5 has no /chat/completions).
+// The registry's transport order is the preference order, so providers can put the
+// endpoint real clients use most first.
+export function resolveFallbackTransport(provider, supportedFormats) {
+  if (!Array.isArray(supportedFormats) || !supportedFormats.length) return null;
+  const config = PROVIDERS[provider];
+  const transports = config?.transports;
+  if (!Array.isArray(transports) || !transports.length) return null;
+  return transports.find((t) => supportedFormats.includes(t.format || "openai")) || null;
+}
+
+// Transport for one model: the sourceFormat-matched endpoint when the model
+// declares that format (zero translation), otherwise the model's preferred
+// declared endpoint. Undeclared models keep the old behavior — the matched
+// transport or the provider default.
+export function resolveModelTransport(provider, sourceFormat, supportedFormats) {
+  const matchesSource = !supportedFormats || supportedFormats.includes(sourceFormat);
+  if (matchesSource) {
+    const matched = resolveTransport(provider, sourceFormat);
+    if (matched) return matched;
+  }
+  return resolveFallbackTransport(provider, supportedFormats);
+}
+
 // Check if last message is from user
 export function isLastMessageFromUser(body) {
   const messages = body.messages || body.contents;

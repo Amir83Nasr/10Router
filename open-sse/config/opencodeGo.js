@@ -2,8 +2,9 @@
 // Limits and model access are enforced server-side; nothing here gates requests.
 export const OPENCODE_GO_DOCS_URL = "https://opencode.ai/v2/docs/console/go";
 
-// Wire formats Go serves, matching the registry transport `format` values. A Go key
-// must be accepted by every endpoint here, so the connection probe checks all of them.
+// Wire formats the connection probe covers, matching registry transport `format`
+// values. The Google wire (`/google/v1beta/models/{model}`) is served for a single
+// model and is not probed, because its URL depends on that model's availability.
 export const OPENCODE_GO_ENDPOINTS = [
   {
     format: "openai",

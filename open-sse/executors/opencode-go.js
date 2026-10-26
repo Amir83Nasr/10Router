@@ -50,6 +50,13 @@ export class OpenCodeGoExecutor extends DefaultExecutor {
   buildUrl(model, stream, urlIndex = 0, credentials = null) {
     // Muse Spark lives on /responses even when a stale runtimeTransport leaks in.
     if (isResponsesModel(model)) return RESPONSES_BASE_URL;
+    // Google wire carries the model id in the path, unlike the OpenAI/Anthropic
+    // endpoints whose transport URL is the full target.
+    const transport = credentials?.runtimeTransport;
+    if (transport?.format === "gemini") {
+      const action = stream ? "streamGenerateContent?alt=sse" : "generateContent";
+      return `${transport.baseUrl}/${baseModelId(model)}:${action}`;
+    }
     return super.buildUrl(model, stream, urlIndex, credentials);
   }
 

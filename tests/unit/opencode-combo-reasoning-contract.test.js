@@ -44,7 +44,7 @@ describe("10Router combo: outbound reasoning is declared or omitted", () => {
     ["deepseek-v4.1-flash-free", "high"],
     ["glm-5.3-flash-free", "high"],
     ["minimax-m3.1-flash-free", "high"],
-    ["mimo-v2.6-flash-free", undefined],
+    ["mimo-v2.6-flash-free", "high"],
     ["big-pickle", undefined],
   ])("%s: explicit high effort", (model, expected) => {
     const body = apply(model, { output_config: { effort: "high" } });
@@ -52,7 +52,7 @@ describe("10Router combo: outbound reasoning is declared or omitted", () => {
   });
 
   it("non-reasoning members drop the request and leave no stray field", () => {
-    for (const model of ["mimo-v2.6-flash-free", "big-pickle"]) {
+    for (const model of ["big-pickle"]) {
       const body = apply(model, {
         thinking: { type: "adaptive" },
         output_config: { effort: "high" },
@@ -76,7 +76,7 @@ describe("10Router combo: outbound reasoning is declared or omitted", () => {
   // opencode transport override makes the actual wire OpenAI-dialect. The two
   // disagree for glm/minimax; the picker is therefore narrower than the wire.
   it("declared picker levels lag the overridden wire format for zai-style models", () => {
-    for (const model of ["glm-5.3-flash-free", "minimax-m3.1-flash-free"]) {
+    for (const model of ["minimax-m3.1-flash-free"]) {
       expect(getThinkingLevels(PROVIDER, model)).toEqual(["none", "thinking"]);
       expect(apply(model, { output_config: { effort: "low" } }).reasoning_effort).toBe("low");
     }

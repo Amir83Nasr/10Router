@@ -90,13 +90,13 @@ const warnings = (log) => log.warn.mock.calls.filter(([tag]) => tag === "THINKIN
 
 describe("unsupported effort is observable", () => {
   it("warns when the routed model cannot reason", async () => {
-    const request = claudeRequest("opencode", "mimo-v2.6-flash-free");
+    const request = claudeRequest("opencode", "big-pickle");
     const result = await handleChatCore(request);
 
     expect(result?.success).toBe(true);
     const [tag, message] = warnings(request.log)[0] ?? [];
     expect(tag).toBe("THINKING");
-    expect(message).toContain("mimo-v2.6-flash-free");
+    expect(message).toContain("big-pickle");
     expect(message).toContain("high");
   });
 
@@ -107,7 +107,7 @@ describe("unsupported effort is observable", () => {
   });
 
   it("does not warn when no effort was requested", async () => {
-    const request = claudeRequest("opencode", "mimo-v2.6-flash-free");
+    const request = claudeRequest("opencode", "big-pickle");
     delete request.body.thinking;
     delete request.body.output_config;
     await handleChatCore(request);
@@ -115,7 +115,7 @@ describe("unsupported effort is observable", () => {
   });
 
   it("does not warn when thinking was explicitly disabled", async () => {
-    const request = claudeRequest("opencode", "mimo-v2.6-flash-free");
+    const request = claudeRequest("opencode", "big-pickle");
     request.body.thinking = { type: "disabled" };
     delete request.body.output_config;
     await handleChatCore(request);
@@ -123,7 +123,7 @@ describe("unsupported effort is observable", () => {
   });
 
   it("still drops the field — reporting does not change the request", async () => {
-    const request = claudeRequest("opencode", "mimo-v2.6-flash-free");
+    const request = claudeRequest("opencode", "big-pickle");
     const result = await handleChatCore(request);
     expect(result?.success).toBe(true);
   });

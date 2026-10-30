@@ -2,6 +2,10 @@
 
 All notable changes to 10Router will be documented in this file.
 
+## [0.1.18] — 2026-10-30
+
+- Synced OpenCode free-tier and OpenCode Go improvements from 9router: TLS-impersonating client (wreq-js) for the free tier, opencode free-tier capability entries (glm-5.3-flash-free on openai format, mimo reasoning, deepseek-v4.1-flash-free 330k context cap), and `isOpencodeFreeTierModel`/`isDeepSeekModel` helpers.
+
 ## [0.1.17] — 2026-10-26
 
 - Fix: OpenCode Go routed each model to the provider's default endpoint instead of one it actually serves. An OpenAI-format client asking for a claude-only model (`claude-haiku-5-5`, `minimax-m2.7`) was sent to `/chat/completions` and rejected upstream with `ModelProtocolUnsupported`; `chatCore` and the tests now share `resolveModelTransport` (`open-sse/services/provider.js`), which prefers the sourceFormat-matched endpoint (no translation) and otherwise a model-declared one.

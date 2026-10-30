@@ -6,6 +6,7 @@ import { getThinkingLevels } from "../providers/thinkingLevels.js";
 import { injectReasoningContent } from "../utils/reasoningContentInjector.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { isMuseSparkModel } from "../providers/models/helpers.js";
+import { opencodeTlsFetch, OpencodeTlsUnavailableError } from "../services/opencodeTlsClient.js";
 import {
   applyFingerprintTools,
   detectToolShape,
@@ -357,6 +358,25 @@ export class OpenCodeExecutor extends BaseExecutor {
     const result = await super.execute({
       ...args,
       credentials: this.prepareRequestCredentials(args),
+      directFetch: async (url, options) => {
+        try {
+          return await opencodeTlsFetch(
+            url,
+            {
+              method: options.method,
+              headers: options.headers,
+              body: options.body,
+            },
+            { signal: options.signal },
+          );
+        } catch (error) {
+          if (error instanceof OpencodeTlsUnavailableError) {
+            // Fail-open: wreq-js not installed; use native fetch.
+            return fetch(url, options);
+          }
+          throw error;
+        }
+      },
     });
     // Only a temporary quota window earns the breaker. Entitlement 429s
     // ("free models work in OpenCode") are permanent plan gates: cooling the

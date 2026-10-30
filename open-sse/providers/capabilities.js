@@ -253,6 +253,16 @@ export const MODEL_CAPABILITIES = {
     contextWindow: 1000000,
     maxOutput: 131072,
   },
+  "glm-5.3-flash-free": {
+    vision: true,
+    videoInput: true,
+    pdf: true,
+    reasoning: true,
+    thinkingFormat: "openai",
+    thinkingCanDisable: false,
+    contextWindow: 1000000,
+    maxOutput: 128000,
+  },
   "glm-4.6v": {
     vision: true,
     videoInput: true,
@@ -621,6 +631,26 @@ export const PROVIDER_CAPABILITIES = {
   // /api/v2/image/upload and leaves image_urls/chat_context.imageUrls null
   // (same as qodercli). reasoning:true on all of them — every model can
   // reason; the upstream is_reasoning flag only drives model_config selection.
+  // OpenCode Free (oc)
+  opencode: {
+    "mimo-v2.6-flash-free": {
+      vision: true,
+      audioInput: true,
+      videoInput: true,
+      reasoning: true,
+      thinkingFormat: "openai",
+      thinkingCanDisable: true,
+      contextWindow: 1048576,
+      maxOutput: 131072,
+    },
+    "deepseek-v4.1-flash-free": {
+      vision: true,
+      reasoning: true,
+      thinkingFormat: "deepseek",
+      contextWindow: 330000,
+      maxOutput: 128000,
+    },
+  },
   // thinkingFormat keeps the true-model family for documentation/UI, but
   // thinkingCanDisable:false everywhere: the executor only forwards
   // messages/tools/max_tokens, and thinking is fixed upstream via
